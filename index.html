@@ -13,22 +13,37 @@
 
   <style>
     body { font-family: system-ui, -apple-system, sans-serif; }
+
+    /* לכפתורי multi-select בלי אייקון דיפולטי */
     select[multiple] { background-image: none !important; }
+
+    /* ✅ מניעת “בריחה” מהמסך והוספת גלילה רק לאזורי תוכן (לא לכל הדף) */
+    html, body { height: 100%; overflow-x: hidden; }
+
+    /* טבלאות/תוכן רחב – יתגללו אופקית בתוך הקופסה */
+    .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .table-scroll table { min-width: 980px; } /* שומר על עמודות קריאות במחשב */
+
+    /* מודלים – גלילה פנימית */
+    .modal-card { max-height: 90vh; overflow: auto; }
+
+    /* מונע “התפוצצות” טקסט ארוך (מייל/ספק/שם) */
+    .break-anywhere { overflow-wrap: anywhere; word-break: break-word; }
   </style>
 </head>
 
 <body class="min-h-screen bg-gray-50">
 
   <!-- כותרת עליונה -->
-  <div class="bg-white border-b">
+  <div class="bg-white border-b sticky top-0 z-40">
     <div class="max-w-7xl mx-auto px-4 py-4">
-      <div class="flex items-center justify-between">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div class="flex items-center gap-3">
-          <div class="w-10 h-10 bg-gray-900 rounded-lg flex items-center justify-center">
+          <div class="w-10 h-10 bg-gray-900 rounded-lg flex items-center justify-center shrink-0">
             <i data-lucide="package" class="w-6 h-6 text-white"></i>
           </div>
-          <div>
-            <h1 class="text-2xl font-bold">מעקב דוגמאות</h1>
+          <div class="min-w-0">
+            <h1 class="text-2xl font-bold truncate">מעקב דוגמאות</h1>
 
             <!-- Record ID פנימי - מוסתר (לא מוצג למשתמש) -->
             <div class="hidden" aria-hidden="true">
@@ -38,7 +53,7 @@
           </div>
         </div>
 
-        <div class="flex gap-3">
+        <div class="flex flex-wrap gap-3">
           <button id="exportJsonBtn" class="px-4 py-2 text-gray-700 border rounded-lg hover:bg-gray-50 flex items-center gap-2">
             <i data-lucide="download" class="w-4 h-4"></i>
             ייצא ל-JSON
@@ -47,6 +62,12 @@
             <i data-lucide="users" class="w-4 h-4"></i>
             אנשי קשר (<span id="contactsCount">0</span>)
           </button>
+
+          <!-- ✅ אינדיקציה אוטומטית מובייל/מחשב -->
+          <span id="devicePill" class="hidden sm:inline-flex items-center gap-2 px-3 py-2 rounded-lg border bg-white text-sm text-gray-600">
+            <i data-lucide="smartphone" class="w-4 h-4"></i>
+            <span id="deviceLabel">מובייל</span>
+          </span>
         </div>
       </div>
     </div>
@@ -58,11 +79,11 @@
   </div>
 
   <!-- תוכן ראשי -->
-  <div class="max-w-7xl mx-auto px-4 py-8" id="mainContent"></div>
+  <div class="max-w-7xl mx-auto px-4 py-6 sm:py-8" id="mainContent"></div>
 
   <!-- מודל דוגמה -->
   <div id="sampleModal" class="fixed inset-0 bg-black bg-opacity-50 items-center justify-center p-4 z-50 hidden">
-    <div class="bg-white rounded-xl max-w-md w-full p-6">
+    <div class="bg-white rounded-xl max-w-md w-full p-6 modal-card">
       <div class="flex items-center justify-between mb-6">
         <h3 class="text-xl font-bold" id="sampleModalTitle">דוגמה חדשה</h3>
         <button id="closeSampleModal" class="text-gray-500 hover:text-gray-700">
@@ -75,7 +96,7 @@
 
   <!-- מודל אנשי קשר -->
   <div id="contactsModal" class="fixed inset-0 bg-black bg-opacity-50 items-center justify-center p-4 z-50 hidden">
-    <div class="bg-white rounded-xl max-w-3xl w-full p-6 max-h-[90vh] overflow-y-auto">
+    <div class="bg-white rounded-xl max-w-3xl w-full p-6 modal-card">
       <div class="flex items-center justify-between mb-6">
         <h3 class="text-xl font-bold">ניהול אנשי קשר</h3>
         <button id="closeContactsModal" class="text-gray-500 hover:text-gray-700">
@@ -150,6 +171,28 @@
       };
       el.className = `${base} ${styles[type] || styles.info}`;
       el.innerHTML = html;
+    }
+
+    // ==========================================
+    // ✅ זיהוי אוטומטי: מובייל/מחשב + עדכון אינדיקציה
+    // ==========================================
+    function isMobileNow() {
+      const coarse = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
+      const narrow = window.innerWidth < 640; // sm
+      return coarse || narrow;
+    }
+
+    function updateDevicePill() {
+      const pill = document.getElementById("devicePill");
+      const label = document.getElementById("deviceLabel");
+      if (!pill || !label) return;
+
+      const mobile = isMobileNow();
+      label.textContent = mobile ? "מובייל" : "מחשב";
+      pill.innerHTML = mobile
+        ? `<i data-lucide="smartphone" class="w-4 h-4"></i><span id="deviceLabel">מובייל</span>`
+        : `<i data-lucide="monitor" class="w-4 h-4"></i><span id="deviceLabel">מחשב</span>`;
+      lucide.createIcons();
     }
 
     // ==========================================
@@ -467,20 +510,20 @@
             return `
               <tr class="hover:bg-gray-50">
                 <td class="px-6 py-4">
-                  <div class="font-medium">${escapeHtml(s.name)}</div>
+                  <div class="font-medium break-anywhere">${escapeHtml(s.name)}</div>
                   <div class="text-sm text-gray-400">#${Number(s.seq || 0)}</div>
                 </td>
-                <td class="px-6 py-4">${escapeHtml(s.supplier)}</td>
+                <td class="px-6 py-4 break-anywhere">${escapeHtml(s.supplier)}</td>
                 <td class="px-6 py-4 text-gray-600">${Number(s.quantity || 0)}</td>
-                <td class="px-6 py-4 text-gray-600">${new Date(s.date).toLocaleDateString('he-IL')}</td>
-                <td class="px-6 py-4"><span class="px-3 py-1 rounded-full text-sm ${status.color}">${status.label}</span></td>
+                <td class="px-6 py-4 text-gray-600 whitespace-nowrap">${new Date(s.date).toLocaleDateString('he-IL')}</td>
+                <td class="px-6 py-4"><span class="px-3 py-1 rounded-full text-sm ${status.color} whitespace-nowrap">${status.label}</span></td>
                 <td class="px-6 py-4">
-                  <div class="flex items-center gap-2">
-                    <div class="w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center text-xs">👤</div>
-                    <span class="text-sm">${escapeHtml(assigned)}</span>
+                  <div class="flex items-center gap-2 min-w-0">
+                    <div class="w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center text-xs shrink-0">👤</div>
+                    <span class="text-sm break-anywhere">${escapeHtml(assigned)}</span>
                   </div>
                 </td>
-                <td class="px-6 py-4">
+                <td class="px-6 py-4 whitespace-nowrap">
                   <div class="flex items-center gap-3">
                     <button onclick="openSampleModal('${s.id}')" class="text-blue-600 hover:text-blue-800">ערוך</button>
                     <button onclick="deleteSample('${s.id}')" class="text-red-600 hover:text-red-800">מחק</button>
@@ -491,7 +534,7 @@
 
       const emailLogHtml = emailLog.length > 0 ? `
         <div class="mt-6 bg-white rounded-xl border p-6">
-          <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center justify-between mb-4 gap-3 flex-wrap">
             <div class="flex items-center gap-2">
               <i data-lucide="mail" class="w-5 h-5 text-gray-600"></i>
               <h3 class="text-lg font-bold">יומן מיילים</h3>
@@ -506,7 +549,7 @@
             ${emailLog.slice(-8).reverse().map((e, idx) => `
               <div class="p-3 bg-gray-50 rounded-lg text-sm">
                 <div class="flex justify-between mb-1 gap-3 items-start">
-                  <div class="font-medium">${escapeHtml(e.subject || '')}</div>
+                  <div class="font-medium break-anywhere">${escapeHtml(e.subject || '')}</div>
 
                   <div class="flex items-center gap-3 whitespace-nowrap">
                     <span class="text-gray-500">${new Date(e.timestamp).toLocaleString('he-IL')}</span>
@@ -517,9 +560,9 @@
                   </div>
                 </div>
 
-                <div class="text-gray-600">נמען ראשי: ${escapeHtml(e.to || '')}</div>
+                <div class="text-gray-600 break-anywhere">נמען ראשי: ${escapeHtml(e.to || '')}</div>
                 ${(Array.isArray(e.extra) && e.extra.length)
-                  ? `<div class="text-gray-500 text-xs mt-1">נמענים נוספים: ${escapeHtml(e.extra.join(', '))}</div>`
+                  ? `<div class="text-gray-500 text-xs mt-1 break-anywhere">נמענים נוספים: ${escapeHtml(e.extra.join(', '))}</div>`
                   : ``}
               </div>
             `).join('')}
@@ -529,62 +572,62 @@
         </div>` : '';
 
       document.getElementById('mainContent').innerHTML = `
-        <div class="flex items-center justify-between mb-6">
-          <div>
-            <h2 class="text-3xl font-bold mb-2">ניהול דוגמאות</h2>
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+          <div class="min-w-0">
+            <h2 class="text-2xl sm:text-3xl font-bold mb-1">ניהול דוגמאות</h2>
             <p class="text-gray-600">מעקב וניהול דוגמאות שהתקבלו בחברה</p>
           </div>
-          <button id="newSampleBtn" class="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800">
+          <button id="newSampleBtn" class="flex items-center justify-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 w-full sm:w-auto">
             <i data-lucide="plus" class="w-5 h-5"></i>
             דוגמה חדשה
           </button>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <div class="bg-white p-6 rounded-xl border">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6">
+          <div class="bg-white p-4 sm:p-6 rounded-xl border">
             <div class="flex justify-between mb-2">
               <span class="text-gray-600">סה"כ</span>
               <div class="w-10 h-10 bg-gray-900 rounded-lg flex items-center justify-center">
                 <i data-lucide="package" class="w-5 h-5 text-white"></i>
               </div>
             </div>
-            <div class="text-3xl font-bold">${stats.total}</div>
+            <div class="text-2xl sm:text-3xl font-bold">${stats.total}</div>
           </div>
 
-          <div class="bg-white p-6 rounded-xl border">
+          <div class="bg-white p-4 sm:p-6 rounded-xl border">
             <div class="flex justify-between mb-2">
               <span class="text-gray-600">התקבל</span>
               <div class="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
                 <i data-lucide="check-circle" class="w-5 h-5 text-white"></i>
               </div>
             </div>
-            <div class="text-3xl font-bold">${stats.received}</div>
+            <div class="text-2xl sm:text-3xl font-bold">${stats.received}</div>
           </div>
 
-          <div class="bg-white p-6 rounded-xl border">
+          <div class="bg-white p-4 sm:p-6 rounded-xl border">
             <div class="flex justify-between mb-2">
               <span class="text-gray-600">בבדיקה</span>
               <div class="w-10 h-10 bg-yellow-500 rounded-lg flex items-center justify-center">
                 <i data-lucide="clock" class="w-5 h-5 text-white"></i>
               </div>
             </div>
-            <div class="text-3xl font-bold">${stats.testing}</div>
+            <div class="text-2xl sm:text-3xl font-bold">${stats.testing}</div>
           </div>
 
-          <div class="bg-white p-6 rounded-xl border">
+          <div class="bg-white p-4 sm:p-6 rounded-xl border">
             <div class="flex justify-between mb-2">
               <span class="text-gray-600">נמסר</span>
               <div class="w-10 h-10 bg-purple-500 rounded-lg flex items-center justify-center">
                 <i data-lucide="send" class="w-5 h-5 text-white"></i>
               </div>
             </div>
-            <div class="text-3xl font-bold">${stats.delivered}</div>
+            <div class="text-2xl sm:text-3xl font-bold">${stats.delivered}</div>
           </div>
         </div>
 
         <div class="bg-white rounded-xl border mb-6 p-4">
           <div class="flex flex-col sm:flex-row gap-4">
-            <select id="statusFilter" class="px-4 py-2 border rounded-lg">
+            <select id="statusFilter" class="px-4 py-2 border rounded-lg w-full sm:w-52">
               <option value="all">כל הסטטוסים</option>
               ${statusOptions.map(o => `<option value="${o.value}">${o.label}</option>`).join('')}
             </select>
@@ -597,20 +640,23 @@
         </div>
 
         <div class="bg-white rounded-xl border overflow-hidden">
-          <table class="w-full">
-            <thead class="bg-gray-50 border-b">
-              <tr>
-                <th class="px-6 py-3 text-right text-sm font-medium text-gray-700">שם הדוגמה</th>
-                <th class="px-6 py-3 text-right text-sm font-medium text-gray-700">ספק</th>
-                <th class="px-6 py-3 text-right text-sm font-medium text-gray-700">כמות</th>
-                <th class="px-6 py-3 text-right text-sm font-medium text-gray-700">תאריך קבלה</th>
-                <th class="px-6 py-3 text-right text-sm font-medium text-gray-700">סטטוס</th>
-                <th class="px-6 py-3 text-right text-sm font-medium text-gray-700">נמסר ל</th>
-                <th class="px-6 py-3 text-right text-sm font-medium text-gray-700">פעולות</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y">${tableRows}</tbody>
-          </table>
+          <!-- ✅ גלילה אופקית רק לטבלה כשצריך (מובייל/מסכים צרים) -->
+          <div class="table-scroll">
+            <table class="w-full">
+              <thead class="bg-gray-50 border-b">
+                <tr>
+                  <th class="px-6 py-3 text-right text-sm font-medium text-gray-700">שם הדוגמה</th>
+                  <th class="px-6 py-3 text-right text-sm font-medium text-gray-700">ספק</th>
+                  <th class="px-6 py-3 text-right text-sm font-medium text-gray-700">כמות</th>
+                  <th class="px-6 py-3 text-right text-sm font-medium text-gray-700">תאריך קבלה</th>
+                  <th class="px-6 py-3 text-right text-sm font-medium text-gray-700">סטטוס</th>
+                  <th class="px-6 py-3 text-right text-sm font-medium text-gray-700">נמסר ל</th>
+                  <th class="px-6 py-3 text-right text-sm font-medium text-gray-700">פעולות</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y">${tableRows}</tbody>
+            </table>
+          </div>
         </div>
 
         ${emailLogHtml}
@@ -671,7 +717,6 @@
           <input id="sampleQuantity" type="number" min="0" value="${Number(currentSample?.quantity || 0)}" class="w-full px-4 py-2 border rounded-lg">
         </div>
 
-        <!-- ✅ חדש: תאריך קבלה לעריכה -->
         <div>
           <label class="block text-sm font-medium mb-2">תאריך קבלה</label>
           <input id="sampleDate" type="date" value="${dateValue}" class="w-full px-4 py-2 border rounded-lg">
@@ -710,9 +755,9 @@
           <div class="text-xs text-gray-500 mt-1">כשסטטוס "נמסר" חובה לבחור למי נמסר.</div>
         </div>
 
-        <div class="mt-4 flex justify-end gap-3">
-          <button onclick="closeModal('sampleModal')" class="px-4 py-2 border rounded-lg">בטל</button>
-          <button onclick="saveSample()" class="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800">שמור</button>
+        <div class="mt-4 flex flex-col sm:flex-row justify-end gap-3">
+          <button onclick="closeModal('sampleModal')" class="px-4 py-2 border rounded-lg w-full sm:w-auto">בטל</button>
+          <button onclick="saveSample()" class="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 w-full sm:w-auto">שמור</button>
         </div>
       `;
 
@@ -739,7 +784,6 @@
       const ccSel = document.getElementById('sampleCcEmails');
       const ccEmails = ccSel ? Array.from(ccSel.selectedOptions).map(o => (o.value || '').trim()).filter(Boolean) : [];
 
-      // ✅ חדש: תאריך קבלה מהטופס
       const dateInput = document.getElementById('sampleDate')?.value; // YYYY-MM-DD
       const dateIso = dateInput ? new Date(dateInput + "T12:00:00").toISOString() : new Date().toISOString();
 
@@ -794,13 +838,13 @@
       section.innerHTML = contacts.length === 0
         ? `<div class="text-gray-500 text-center py-4">אין אנשי קשר. לחץ על "הוסף איש קשר" כדי להתחיל.</div>`
         : contacts.map(c => `
-          <div class="flex justify-between items-center bg-gray-50 p-3 rounded-lg">
-            <div>
-              <span class="font-medium">${escapeHtml(c.name)}</span>
+          <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 bg-gray-50 p-3 rounded-lg">
+            <div class="min-w-0">
+              <span class="font-medium break-anywhere">${escapeHtml(c.name)}</span>
               <span class="text-gray-400">•</span>
-              <span class="text-gray-600">${escapeHtml(c.email)}</span>
+              <span class="text-gray-600 break-anywhere">${escapeHtml(c.email)}</span>
             </div>
-            <div class="flex gap-2">
+            <div class="flex gap-2 shrink-0">
               <button onclick="editContact('${escapeHtml(c.id)}')" class="text-blue-600 hover:text-blue-800 px-3 py-1">ערוך</button>
               <button onclick="deleteContact('${escapeHtml(c.id)}')" class="text-red-600 hover:text-red-800 px-3 py-1">מחק</button>
             </div>
@@ -830,9 +874,9 @@
           </div>
         </div>
 
-        <div class="mt-4 flex justify-end gap-3">
-          <button onclick="clearContactForm()" class="px-4 py-2 border rounded-lg hover:bg-gray-50">בטל</button>
-          <button onclick="saveContact()" class="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800">שמור</button>
+        <div class="mt-4 flex flex-col sm:flex-row justify-end gap-3">
+          <button onclick="clearContactForm()" class="px-4 py-2 border rounded-lg hover:bg-gray-50 w-full sm:w-auto">בטל</button>
+          <button onclick="saveContact()" class="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 w-full sm:w-auto">שמור</button>
         </div>
       `;
     }
@@ -914,6 +958,11 @@
     document.addEventListener("DOMContentLoaded", () => {
       lucide.createIcons();
       updateRidUI(getRidFromUrl());
+      updateDevicePill();
+      window.addEventListener("resize", () => {
+        updateDevicePill();
+      }, { passive: true });
+
       loadData();
     });
 
