@@ -335,34 +335,51 @@
       }
     }
 
-   function buildEmailBody(sample, oldStatus, newStatus) {
-  const oldLabel = oldStatus ? (statusOptions.find(s => s.value === oldStatus)?.label || oldStatus) : 'חדש';
-  const newLabel = statusOptions.find(s => s.value === newStatus)?.label || newStatus;
-
-  const assignedName = sample.assignedTo
-    ? (contacts.find(c => c.id === sample.assignedTo)?.name || 'לא ידוע')
-    : '-';
-
-  const notifyTo = sample.notifyEmail || '';
-
-  // גוף המייל – עם כל פירוט השורה כמו בטבלה
-  return [
-    `שלום,`,
-    ``,
-    `עדכון סטטוס דוגמה`,
-    `-------------------`,
-    `דוגמה: ${sample.name}`,
-    `מספר דוגמה: #${sample.seq || ''}`,
-    `ספק: ${sample.supplier || ''}`,
-    `כמות: ${Number(sample.quantity || 0)}`,
-    `תאריך קבלה: ${new Date(sample.date).toLocaleDateString('he-IL')}`,
-    `סטטוס: ${oldLabel} → ${newLabel}`,
-    `נמסר ל: ${assignedName}`,
-    `נמען לעדכון: ${notifyTo}`,
-    ``,
-    `נשלח מתוך מערכת "מעקב דוגמאות".`
-  ].join('\n');
+  function rtl(line) {
+  return '\u202B' + line;
 }
+
+function buildEmailBody(sample, oldStatus, newStatus) {
+  const assignedName = sample.assignedTo
+    ? (contacts.find(c => c.id === sample.assignedTo)?.name || '—')
+    : '—';
+
+  let intro = '';
+  if (newStatus === 'received') {
+    intro = 'רציתי לעדכן כי דוגמה התקבלה במחסן.';
+  } else if (newStatus === 'testing') {
+    intro = 'עדכון סטטוס לגבי דוגמה שנמצאת בבדיקה במחסן.';
+  } else if (newStatus === 'delivered') {
+    intro = 'רציתי לעדכן כי הדוגמה נמסרה מהמחסן.';
+  } else {
+    intro = 'עדכון סטטוס לגבי דוגמה במחסן.';
+  }
+
+  const lines = [
+    rtl('שלום,'),
+    '',
+    rtl(intro),
+    '',
+    rtl('פרטי הדוגמה:'),
+    rtl(`• דוגמה: ${sample.name}`),
+    rtl(`• ספק: ${sample.supplier || ''}`),
+    rtl(`• כמות: ${Number(sample.quantity || 0)}`),
+    rtl(`• תאריך קבלה: ${new Date(sample.date).toLocaleDateString('he-IL')}`)
+  ];
+
+  if (newStatus === 'delivered') {
+    lines.push(rtl(`• נמסר ל: ${assignedName}`));
+  }
+
+  lines.push(
+    '',
+    rtl('בברכה,'),
+    rtl('מחסן CIDEV')
+  );
+
+  return lines.join('\n');
+}
+
 
 function openEmailDraft({ to, subject, body }) {
   // mailto דורש קידוד נכון
@@ -856,4 +873,5 @@ function sendEmail(sample, oldStatus = null, newStatus) {
 
 </body>
 </html>
+
 
