@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>מעקב דוגמאות</title>
 
+  <!-- מונע 404 על favicon -->
+  <link rel="icon" href="data:,">
+
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
 
@@ -77,15 +80,20 @@
 
   <script>
     // ==========================================
-    // CONFIG - MyJSON
+    // CONFIG - MyJSON (V2)
     // ==========================================
-    const RECORD_ID = "935e9bf6-c335-4925-ad40-78a8705e6edf";
-    const API_URL = `https://api.myjson.online/v1/records/${RECORD_ID}`;
+    // אופציה 1: יש לך Record קיים -> הדבק כאן
+    // אופציה 2: אין לך Record -> השאר ריק, ותן COLLECTION_ID (והמערכת תיצור לבד)
+    const STORAGE_KEY_RECORD = "SAMPLES_RECORD_ID";
 
-    // אם הרשומה PRIVATE תצטרך טוקן אמיתי (UUID) של collection access token.
-    // אם PUBLIC - תשאיר ריק.
-    // ⚠️ אל תדביק פה את ה-Record ID. זה לא טוקן.
-    const ACCESS_TOKEN = ""; // הדבק טוקן אמיתי רק אם צריך
+    const RECORD_ID_FALLBACK = ""; // אם תרצה "לקבע" ידנית, תדביק כאן
+    const COLLECTION_ID = "";      // מומלץ למלא כדי לאפשר יצירה אוטומטית (UUID של Collection)
+
+    // אם הקולקשן PRIVATE תצטרך Access Token אמיתי של הקולקשן.
+    // זה לא recordId.
+    const ACCESS_TOKEN = ""; // x-collection-access-token (רק אם צריך)
+
+    const API_BASE = "https://api.myjson.online/v2/records";
 
     function apiHeaders() {
       const h = { "Content-Type": "application/json" };
@@ -93,6 +101,18 @@
         h["x-collection-access-token"] = ACCESS_TOKEN.trim();
       }
       return h;
+    }
+
+    function getRecordId() {
+      return localStorage.getItem(STORAGE_KEY_RECORD) || RECORD_ID_FALLBACK || "";
+    }
+
+    function setRecordId(id) {
+      if (id) localStorage.setItem(STORAGE_KEY_RECORD, id);
+    }
+
+    function recordUrl(id) {
+      return `${API_BASE}/${id}`;
     }
 
     const statusOptions = [
@@ -107,64 +127,112 @@
     let currentSample = null;
     let editingContact = null;
 
-    // ==========================================
-    // MyJSON helpers - תואם דוגמת phonebook (jsonData)
-    // ==========================================
-    function safeParseJsonData(maybe) {
-      // תומך גם ב:
-      // 1) result.data = { samples:[], ... }
-      // 2) result.data = { jsonData: "...." }
-      if (!maybe || typeof maybe !== "object") return { samples: [], contacts: [], emailLog: [] };
+    function generateId(prefix = 'SMPL') {
+      return prefix + "-" + Date.now().toString(36).toUpperCase() + "-" + Math.random().toString(36).slice(2, 6).toUpperCase();
+    }
 
-      // אם יש jsonData כמחרוזת
-      if (typeof maybe.jsonData === "string") {
-        try {
-          const parsed = JSON.parse(maybe.jsonData);
-          if (parsed && typeof parsed === "object") return parsed;
-        } catch (_) {}
+    function escapeHtml(str) {
+      return String(str ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function normalizeData(dataObj) {
+      const d = (dataObj && typeof dataObj === "object") ? dataObj : {};
+
+      samples  = Array.isArray(d.samples)  ? d.samples  : [];
+      contacts = Array.isArray(d.contacts) ? d.contacts : [];
+      emailLog = Array.isArray(d.emailLog) ? d.emailLog : [];
+
+      samples = samples.map(s => ({
+        id: s.id || generateId("SMPL"),
+        name: s.name || "",
+        supplier: s.supplier || "",
+        quantity: Number(s.quantity || 0),
+        status: s.status || "received",
+        notifyEmail: s.notifyEmail || "",
+        assignedTo: s.assignedTo || null,
+        date: s.date || new Date().toISOString()
+      }));
+
+      contacts = contacts.map(c => ({
+        id: c.id || generateId("C"),
+        name: c.name || "",
+        email: c.email || ""
+      }));
+    }
+
+    async function createRecordIfNeeded() {
+      const existingId = getRecordId();
+      if (existingId) return existingId;
+
+      if (!COLLECTION_ID) {
+        throw new Error("אין RECORD_ID וגם אין COLLECTION_ID כדי ליצור Record חדש אוטומטית.");
       }
 
-      // אם כבר מבנה רגיל
-      return maybe;
+      // לפי הדוקומנטציה: POST /v2/records עם collectionId ו-data :contentReference[oaicite:3]{index=3}
+      const initData = {
+        samples: [],
+        contacts: [],
+        emailLog: [],
+        updateDate: new Date().toLocaleDateString("he-IL")
+      };
+
+      const res = await fetch(API_BASE, {
+        method: "POST",
+        headers: apiHeaders(),
+        body: JSON.stringify({
+          collectionId: COLLECTION_ID,
+          data: initData,
+          metadata: true
+        })
+      });
+
+      if (!res.ok) throw new Error(`${res.status} - ${await res.text()}`);
+      const created = await res.json();
+      const newId = created?.id;
+      if (!newId) throw new Error("נוצר Record אבל לא התקבל id מהשרת.");
+
+      setRecordId(newId);
+      return newId;
     }
 
     async function loadData() {
       try {
-        const res = await fetch(API_URL, { method: "GET", headers: apiHeaders() });
-        if (!res.ok) throw new Error(`${res.status} - ${await res.text()}`);
+        let rid = getRecordId();
+        if (!rid) {
+          rid = await createRecordIfNeeded();
+        }
 
-        const result = await res.json();
-
-        // לרוב זה result.data
-        const dataObj = safeParseJsonData(result.data || {});
-        samples  = Array.isArray(dataObj.samples)  ? dataObj.samples  : [];
-        contacts = Array.isArray(dataObj.contacts) ? dataObj.contacts : [];
-        emailLog = Array.isArray(dataObj.emailLog) ? dataObj.emailLog : [];
-
-        // ניקוי/תיקון ערכים חסרים כדי למנוע קריסות ברינדור
-        samples = samples.map(s => ({
-          id: s.id || generateId("SMPL"),
-          name: s.name || "",
-          supplier: s.supplier || "",
-          quantity: Number(s.quantity || 0),
-          status: s.status || "received",
-          notifyEmail: s.notifyEmail || "",
-          assignedTo: s.assignedTo || null,
-          date: s.date || new Date().toISOString()
-        }));
-
-        contacts = contacts.map(c => ({
-          id: c.id || generateId("C"),
-          name: c.name || "",
-          email: c.email || ""
-        }));
-
+        const res = await fetch(recordUrl(rid), { method: "GET", headers: apiHeaders() });
+        if (res.status === 404) {
+          // אם ה-id שמור אבל כבר לא קיים -> ניצור מחדש (אם יש COLLECTION_ID)
+          localStorage.removeItem(STORAGE_KEY_RECORD);
+          if (COLLECTION_ID) {
+            const newId = await createRecordIfNeeded();
+            const res2 = await fetch(recordUrl(newId), { method: "GET", headers: apiHeaders() });
+            if (!res2.ok) throw new Error(`${res2.status} - ${await res2.text()}`);
+            const result2 = await res2.json();
+            normalizeData(result2.data);
+          } else {
+            throw new Error(`404 - Record לא נמצא. הדבק RECORD_ID תקין או מלא COLLECTION_ID ליצירה אוטומטית.`);
+          }
+        } else {
+          if (!res.ok) throw new Error(`${res.status} - ${await res.text()}`);
+          const result = await res.json();
+          normalizeData(result.data);
+        }
       } catch (err) {
         console.error("⚠️ שגיאה בטעינת הנתונים:", err);
         alert(
           "שגיאה בטעינת MyJSON.\n\n" +
-          "אם הרשומה PRIVATE - חייב להדביק ACCESS_TOKEN אמיתי.\n" +
-          "אם הרשומה לא קיימת/נמחקה - צור Record חדש והחלף RECORD_ID.\n\n" +
+          "בדיקות מהירות:\n" +
+          "1) RECORD_ID נכון וקיים?\n" +
+          "2) אם קולקשן PRIVATE: הדבקת ACCESS_TOKEN בכותרת x-collection-access-token?\n" +
+          "3) אם אין Record: מלא COLLECTION_ID כדי ליצור חדש.\n\n" +
           "פרטים (Console): " + err.message
         );
       }
@@ -174,6 +242,9 @@
 
     async function saveData() {
       try {
+        let rid = getRecordId();
+        if (!rid) rid = await createRecordIfNeeded();
+
         const fullData = {
           samples,
           contacts,
@@ -181,18 +252,15 @@
           updateDate: new Date().toLocaleDateString("he-IL")
         };
 
-        // שומרים בפורמט jsonData (כמו אצלך בספר טלפונים) - הכי אמין
-        const body = JSON.stringify({ jsonData: JSON.stringify(fullData) });
-
-        const res = await fetch(API_URL, {
+        // לפי הדוקומנטציה: PUT /v2/records/{recordId} עם { data: {...} } :contentReference[oaicite:4]{index=4}
+        const res = await fetch(recordUrl(rid), {
           method: "PUT",
           headers: apiHeaders(),
-          body
+          body: JSON.stringify({ data: fullData, metadata: true })
         });
 
         if (!res.ok) throw new Error(`${res.status} - ${await res.text()}`);
         await res.json();
-
         console.log("✅ נשמר בהצלחה!");
         return true;
       } catch (err) {
@@ -202,12 +270,7 @@
       }
     }
 
-    function generateId(prefix = 'SMPL') {
-      return prefix + "-" + Date.now().toString(36).toUpperCase() + "-" + Math.random().toString(36).slice(2, 6).toUpperCase();
-    }
-
     function sendEmail(sample, oldStatus = null, newStatus) {
-      // סימולציה + log (אין שליחת מייל אמיתית בלי שרת)
       const to = sample.notifyEmail || 'manager@company.com';
       const oldLabel = oldStatus ? (statusOptions.find(s => s.value === oldStatus)?.label || oldStatus) : 'חדש';
       const newLabel = statusOptions.find(s => s.value === newStatus)?.label || newStatus;
@@ -399,21 +462,11 @@
         ${emailLogHtml}
       `;
 
-      // icons + events
       lucide.createIcons();
 
       document.getElementById('statusFilter')?.addEventListener('change', renderMain);
       document.getElementById('searchInput')?.addEventListener('input', renderMain);
       document.getElementById('newSampleBtn')?.addEventListener('click', () => openSampleModal());
-    }
-
-    function escapeHtml(str) {
-      return String(str ?? "")
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
     }
 
     // ==========================================
@@ -508,14 +561,12 @@
         samples.push({ id, name, supplier, quantity, status, notifyEmail, assignedTo, date: new Date().toISOString() });
       }
 
-      // שמירה
       const saved = await saveData();
 
-      // לוג מייל אם סטטוס השתנה
       if (saved && status !== oldStatus) {
         const sampleRef = currentSample || samples[samples.length - 1];
         sendEmail(sampleRef, oldStatus, status);
-        await saveData(); // לשמור גם את ה-emailLog שנוסף
+        await saveData();
       }
 
       closeModal('sampleModal');
@@ -589,9 +640,7 @@
       `;
     }
 
-    function editContact(id) {
-      showContactForm(id);
-    }
+    function editContact(id) { showContactForm(id); }
 
     function clearContactForm() {
       editingContact = null;
@@ -606,16 +655,12 @@
       if (!name || !email) return alert('יש למלא שם ומייל');
       if (!email.includes('@')) return alert('כתובת מייל לא תקינה');
 
-      // מניעת כפילות מייל (אופציונלי אבל מומלץ)
       const emailLower = email.toLowerCase();
       const duplicate = contacts.find(c => c.email?.toLowerCase() === emailLower && (!editingContact || c.id !== editingContact.id));
       if (duplicate) return alert('כבר קיים איש קשר עם מייל זה.');
 
-      if (editingContact) {
-        Object.assign(editingContact, { name, email });
-      } else {
-        contacts.push({ id: generateId('C'), name, email });
-      }
+      if (editingContact) Object.assign(editingContact, { name, email });
+      else contacts.push({ id: generateId('C'), name, email });
 
       const saved = await saveData();
       if (saved) {
@@ -630,8 +675,6 @@
       if (!confirm("למחוק איש קשר זה?")) return;
 
       contacts = contacts.filter(c => c.id !== id);
-
-      // ניקוי שיוך דוגמאות
       samples = samples.map(s => (s.assignedTo === id ? { ...s, assignedTo: null } : s));
 
       const saved = await saveData();
@@ -650,7 +693,6 @@
     document.getElementById('closeContactsModal').addEventListener('click', () => closeModal('contactsModal'));
     document.getElementById('closeSampleModal').addEventListener('click', () => closeModal('sampleModal'));
 
-    // סגירה בלחיצה על רקע
     document.getElementById('sampleModal').addEventListener('click', (e) => {
       if (e.target.id === "sampleModal") closeModal("sampleModal");
     });
@@ -658,14 +700,12 @@
       if (e.target.id === "contactsModal") closeModal("contactsModal");
     });
 
-    // Init
     document.addEventListener("DOMContentLoaded", () => {
       lucide.createIcons();
       console.log("🚀 מאתחל את המערכת...");
       loadData();
     });
 
-    // חשיפת פונקציות ל-onclick
     window.openSampleModal = openSampleModal;
     window.deleteSample = deleteSample;
     window.editContact = editContact;
@@ -676,6 +716,5 @@
     window.clearContactForm = clearContactForm;
     window.saveContact = saveContact;
   </script>
-
 </body>
 </html>
