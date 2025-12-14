@@ -335,21 +335,71 @@
       }
     }
 
-    function sendEmail(sample, oldStatus = null, newStatus) {
-      const to = sample.notifyEmail || 'manager@company.com';
-      const oldLabel = oldStatus ? (statusOptions.find(s => s.value === oldStatus)?.label || oldStatus) : 'חדש';
-      const newLabel = statusOptions.find(s => s.value === newStatus)?.label || newStatus;
+   function buildEmailBody(sample, oldStatus, newStatus) {
+  const oldLabel = oldStatus ? (statusOptions.find(s => s.value === oldStatus)?.label || oldStatus) : 'חדש';
+  const newLabel = statusOptions.find(s => s.value === newStatus)?.label || newStatus;
 
-      const emailEntry = {
-        to,
-        subject: `עדכון סטטוס דוגמה - ${sample.name} (${oldLabel} → ${newLabel})`,
-        sampleId: sample.id,
-        timestamp: new Date().toISOString()
-      };
+  const assignedName = sample.assignedTo
+    ? (contacts.find(c => c.id === sample.assignedTo)?.name || 'לא ידוע')
+    : '-';
 
-      emailLog.push(emailEntry);
-      alert(`✉️ נרשם ביומן מיילים (סימולציה)\nל: ${to}\nנושא: ${emailEntry.subject}`);
-    }
+  const notifyTo = sample.notifyEmail || '';
+
+  // גוף המייל – עם כל פירוט השורה כמו בטבלה
+  return [
+    `שלום,`,
+    ``,
+    `עדכון סטטוס דוגמה`,
+    `-------------------`,
+    `דוגמה: ${sample.name}`,
+    `מספר דוגמה: #${sample.seq || ''}`,
+    `ספק: ${sample.supplier || ''}`,
+    `כמות: ${Number(sample.quantity || 0)}`,
+    `תאריך קבלה: ${new Date(sample.date).toLocaleDateString('he-IL')}`,
+    `סטטוס: ${oldLabel} → ${newLabel}`,
+    `נמסר ל: ${assignedName}`,
+    `נמען לעדכון: ${notifyTo}`,
+    ``,
+    `נשלח מתוך מערכת "מעקב דוגמאות".`
+  ].join('\n');
+}
+
+function openEmailDraft({ to, subject, body }) {
+  // mailto דורש קידוד נכון
+  const url =
+    `mailto:${encodeURIComponent(to || '')}` +
+    `?subject=${encodeURIComponent(subject || '')}` +
+    `&body=${encodeURIComponent(body || '')}`;
+
+  // best effort – יפתח Outlook/דואר ברירת מחדל
+  window.location.href = url;
+}
+
+function sendEmail(sample, oldStatus = null, newStatus) {
+  const to = sample.notifyEmail || '';
+  if (!to) {
+    alert('לא נבחר נמען למייל (הודעה למייל). בחר איש קשר ואז שמור שוב.');
+    return;
+  }
+
+  const oldLabel = oldStatus ? (statusOptions.find(s => s.value === oldStatus)?.label || oldStatus) : 'חדש';
+  const newLabel = statusOptions.find(s => s.value === newStatus)?.label || newStatus;
+
+  const subject = `עדכון דוגמה #${sample.seq || ''} - ${sample.name} (${oldLabel} → ${newLabel})`;
+  const body = buildEmailBody(sample, oldStatus, newStatus);
+
+  // אופציונלי: לוג פנימי
+  emailLog.push({
+    to,
+    subject,
+    sampleId: sample.id,
+    timestamp: new Date().toISOString()
+  });
+
+  // פתיחת Outlook/Gmail עם טיוטה מוכנה
+  openEmailDraft({ to, subject, body });
+}
+
 
     function exportToJson() {
       const data = { samples, contacts, emailLog };
@@ -806,3 +856,4 @@
 
 </body>
 </html>
+
