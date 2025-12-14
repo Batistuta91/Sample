@@ -202,12 +202,12 @@
         quantity: Number(s.quantity || 0),
         status: s.status || "received",
         notifyEmail: s.notifyEmail || "",
+        ccEmails: Array.isArray(s.ccEmails) ? s.ccEmails : [], // ✅ חדש: נמענים נוספים
         assignedTo: s.assignedTo || null,
         date: s.date || new Date().toISOString()
       }));
 
       // אם יש רשומות ישנות בלי seq - נשלים בצורה יציבה (מינימום נזק)
-      // נשמור סידור לפי תאריך יצירה ואז נקצה רציף
       const needsSeq = samples.some(s => !s.seq);
       if (needsSeq) {
         const sorted = [...samples].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
@@ -216,7 +216,6 @@
           if (!s.seq) s.seq = i;
           i = Math.max(i, s.seq + 1);
         }
-        // נעתיק חזרה לפי id
         const mapById = new Map(sorted.map(s => [s.id, s]));
         samples = samples.map(s => mapById.get(s.id) || s);
       }
@@ -263,13 +262,11 @@
         return rid;
       }
 
-      // הודעה בלי לחשוף rid
       showBanner(`יוצר מאגר נתונים חדש ומחבר את המערכת...`, "info");
 
       const newId = await createRecord();
       setRidInUrl(newId);
 
-      // בלי להציג rid
       showBanner(`✅ נוצר מאגר נתונים חדש והמערכת מחוברת אליו.`, "ok");
 
       return newId;
@@ -285,9 +282,8 @@
         const result = await res.json();
         normalizeData(result.data);
 
-        // אם הוספנו seq לרשומות ישנות - נשמור פעם אחת כדי לקבע
+        // קיבוע seq אם היו רשומות ישנות
         if (samples.some(s => s.seq)) {
-          // לא חובה, אבל עוזר שהמספרים יישמרו יציב תמיד
           await saveData();
         }
 
@@ -335,89 +331,115 @@
       }
     }
 
-  function rtl(line) {
-  return '\u202B' + line;
-}
+    // ==========================================
+    // Email helpers
+    // ==========================================
+    function rtl(line) { return '\u202B' + line; }
 
-function buildEmailBody(sample, oldStatus, newStatus) {
-  const assignedName = sample.assignedTo
-    ? (contacts.find(c => c.id === sample.assignedTo)?.name || '—')
-    : '—';
+    function buildEmailBody(sample, oldStatus, newStatus) {
+      const assignedName = sample.assignedTo
+        ? (contacts.find(c => c.id === sample.assignedTo)?.name || '—')
+        : '—';
 
-  let intro = '';
-  if (newStatus === 'received') {
-    intro = 'רציתי לעדכן כי דוגמה התקבלה במחסן.';
-  } else if (newStatus === 'testing') {
-    intro = 'עדכון סטטוס לגבי דוגמה שנמצאת בבדיקה במחסן.';
-  } else if (newStatus === 'delivered') {
-    intro = 'רציתי לעדכן כי הדוגמה נמסרה מהמחסן.';
-  } else {
-    intro = 'עדכון סטטוס לגבי דוגמה במחסן.';
-  }
+      let intro = '';
+      if (newStatus === 'received') {
+        intro = 'רציתי לעדכן כי דוגמה התקבלה במחסן.';
+      } else if (newStatus === 'testing') {
+        intro = 'עדכון סטטוס לגבי דוגמה שנמצאת בבדיקה במחסן.';
+      } else if (newStatus === 'delivered') {
+        intro = 'רציתי לעדכן כי הדוגמה נמסרה מהמחסן.';
+      } else {
+        intro = 'עדכון סטטוס לגבי דוגמה במחסן.';
+      }
 
-  const lines = [
-    rtl('שלום,'),
-    '',
-    rtl(intro),
-    '',
-    rtl('פרטי הדוגמה:'),
-    rtl(`• דוגמה: ${sample.name}`),
-    rtl(`• ספק: ${sample.supplier || ''}`),
-    rtl(`• כמות: ${Number(sample.quantity || 0)}`),
-    rtl(`• תאריך קבלה: ${new Date(sample.date).toLocaleDateString('he-IL')}`)
-  ];
+      const lines = [
+        rtl('שלום,'),
+        '',
+        rtl(intro),
+        '',
+        rtl('פרטי הדוגמה:'),
+        rtl(`• דוגמה: ${sample.name}`),
+        rtl(`• מספר דוגמה: #${Number(sample.seq || 0)}`),
+        rtl(`• ספק: ${sample.supplier || ''}`),
+        rtl(`• כמות: ${Number(sample.quantity || 0)}`),
+        rtl(`• תאריך קבלה: ${new Date(sample.date).toLocaleDateString('he-IL')}`)
+      ];
 
-  if (newStatus === 'delivered') {
-    lines.push(rtl(`• נמסר ל: ${assignedName}`));
-  }
+      if (newStatus === 'delivered') {
+        lines.push(rtl(`• נמסר ל: ${assignedName}`));
+      }
 
-  lines.push(
-    '',
-    rtl('בברכה,'),
-    rtl('מחסן CIDEV')
-  );
+      lines.push(
+        '',
+        rtl('בברכה,'),
+        rtl('מחסן CIDEV')
+      );
 
-  return lines.join('\n');
-}
+      return lines.join('\n');
+    }
 
+    // ✅ תומך גם ב-CC (נמענים נוספים)
+    function openEmailDraft({ to, cc = "", subject, body }) {
+      const url =
+        `mailto:${encodeURIComponent(to || '')}` +
+        `?subject=${encodeURIComponent(subject || '')}` +
+        `&cc=${encodeURIComponent(cc || '')}` +
+        `&body=${encodeURIComponent(body || '')}`;
 
-function openEmailDraft({ to, subject, body }) {
-  // mailto דורש קידוד נכון
-  const url =
-    `mailto:${encodeURIComponent(to || '')}` +
-    `?subject=${encodeURIComponent(subject || '')}` +
-    `&body=${encodeURIComponent(body || '')}`;
+      window.location.href = url;
+    }
 
-  // best effort – יפתח Outlook/דואר ברירת מחדל
-  window.location.href = url;
-}
+    function sendEmail(sample, oldStatus = null, newStatus) {
+      const to = sample.notifyEmail || '';
+      if (!to) {
+        alert('לא נבחר נמען למייל (הודעה למייל). בחר איש קשר ואז שמור שוב.');
+        return;
+      }
 
-function sendEmail(sample, oldStatus = null, newStatus) {
-  const to = sample.notifyEmail || '';
-  if (!to) {
-    alert('לא נבחר נמען למייל (הודעה למייל). בחר איש קשר ואז שמור שוב.');
-    return;
-  }
+      const oldLabel = oldStatus ? (statusOptions.find(s => s.value === oldStatus)?.label || oldStatus) : 'חדש';
+      const newLabel = statusOptions.find(s => s.value === newStatus)?.label || newStatus;
 
-  const oldLabel = oldStatus ? (statusOptions.find(s => s.value === oldStatus)?.label || oldStatus) : 'חדש';
-  const newLabel = statusOptions.find(s => s.value === newStatus)?.label || newStatus;
+      const subject = `עדכון דוגמה #${sample.seq || ''} - ${sample.name} (${oldLabel} → ${newLabel})`;
+      const body = buildEmailBody(sample, oldStatus, newStatus);
 
-  const subject = `עדכון דוגמה #${sample.seq || ''} - ${sample.name} (${oldLabel} → ${newLabel})`;
-  const body = buildEmailBody(sample, oldStatus, newStatus);
+      const cc = Array.isArray(sample.ccEmails) ? sample.ccEmails.join(',') : '';
 
-  // אופציונלי: לוג פנימי
-  emailLog.push({
-    to,
-    subject,
-    sampleId: sample.id,
-    timestamp: new Date().toISOString()
-  });
+      // לוג פנימי
+      emailLog.push({
+        to,
+        cc,
+        subject,
+        sampleId: sample.id,
+        timestamp: new Date().toISOString()
+      });
 
-  // פתיחת Outlook/Gmail עם טיוטה מוכנה
-  openEmailDraft({ to, subject, body });
-}
+      openEmailDraft({ to, cc, subject, body });
+    }
 
+    // ==========================================
+    // Email log delete / clear
+    // ==========================================
+    async function deleteEmailLogItem(idxFromEnd) {
+      const realIndex = emailLog.length - 1 - idxFromEnd; // 0=האחרון
+      if (realIndex < 0 || realIndex >= emailLog.length) return;
 
+      if (!confirm("למחוק רשומת מייל זו מהיומן?")) return;
+
+      emailLog.splice(realIndex, 1);
+      await saveData();
+      renderMain();
+    }
+
+    async function clearEmailLog() {
+      if (!confirm("לנקות את כל יומן המיילים?")) return;
+      emailLog = [];
+      await saveData();
+      renderMain();
+    }
+
+    // ==========================================
+    // Export
+    // ==========================================
     function exportToJson() {
       const data = { samples, contacts, emailLog };
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -453,7 +475,7 @@ function sendEmail(sample, oldStatus = null, newStatus) {
         filtered = filtered.filter(s =>
           (s.name || '').toLowerCase().includes(searchTerm) ||
           (s.supplier || '').toLowerCase().includes(searchTerm) ||
-          String(s.seq || '').includes(searchTermRaw.trim()) // חיפוש לפי מספר רץ
+          String(s.seq || '').includes(searchTermRaw.trim())
         );
       }
 
@@ -489,22 +511,38 @@ function sendEmail(sample, oldStatus = null, newStatus) {
 
       const emailLogHtml = emailLog.length > 0 ? `
         <div class="mt-6 bg-white rounded-xl border p-6">
-          <div class="flex items-center gap-2 mb-4">
-            <i data-lucide="mail" class="w-5 h-5 text-gray-600"></i>
-            <h3 class="text-lg font-bold">יומן מיילים</h3>
-            <span class="text-sm text-gray-500">(${emailLog.length} נרשמו)</span>
+          <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-2">
+              <i data-lucide="mail" class="w-5 h-5 text-gray-600"></i>
+              <h3 class="text-lg font-bold">יומן מיילים</h3>
+              <span class="text-sm text-gray-500">(${emailLog.length} נרשמו)</span>
+            </div>
+            <button onclick="clearEmailLog()" class="px-3 py-1 text-sm border rounded-lg hover:bg-gray-50">
+              נקה יומן
+            </button>
           </div>
+
           <div class="space-y-2 max-h-60 overflow-y-auto">
-            ${emailLog.slice(-8).reverse().map(e => `
+            ${emailLog.slice(-8).reverse().map((e, idx) => `
               <div class="p-3 bg-gray-50 rounded-lg text-sm">
-                <div class="flex justify-between mb-1 gap-3">
-                  <span class="font-medium">${escapeHtml(e.subject || '')}</span>
-                  <span class="text-gray-500 whitespace-nowrap">${new Date(e.timestamp).toLocaleString('he-IL')}</span>
+                <div class="flex justify-between mb-1 gap-3 items-start">
+                  <div class="font-medium">${escapeHtml(e.subject || '')}</div>
+
+                  <div class="flex items-center gap-3 whitespace-nowrap">
+                    <span class="text-gray-500">${new Date(e.timestamp).toLocaleString('he-IL')}</span>
+                    <button onclick="deleteEmailLogItem(${idx})"
+                      class="text-red-600 hover:text-red-800 text-xs border border-red-200 rounded px-2 py-1">
+                      מחק
+                    </button>
+                  </div>
                 </div>
+
                 <div class="text-gray-600">נשלח ל: ${escapeHtml(e.to || '')}</div>
+                ${e.cc ? `<div class="text-gray-500 text-xs mt-1">CC: ${escapeHtml(e.cc)}</div>` : ``}
               </div>
             `).join('')}
           </div>
+
           <div class="text-xs text-gray-500 mt-3">* זה יומן סימולציה. שליחה אמיתית דורשת שרת/אוטומציה.</div>
         </div>` : '';
 
@@ -617,6 +655,8 @@ function sendEmail(sample, oldStatus = null, newStatus) {
         `<option value="${escapeHtml(c.id)}" ${currentSample?.assignedTo === c.id ? 'selected' : ''}>${escapeHtml(c.name)}</option>`
       ).join('');
 
+      const ccValue = (currentSample?.ccEmails || []).join(", ");
+
       document.getElementById('sampleFormContent').innerHTML = `
         ${currentSample ? `<div class="text-xs text-gray-500">מספר דוגמה: <b>#${Number(currentSample.seq || 0)}</b></div>` : ``}
 
@@ -643,11 +683,20 @@ function sendEmail(sample, oldStatus = null, newStatus) {
         </div>
 
         <div>
-          <label class="block text-sm font-medium mb-2">הודעה למייל</label>
+          <label class="block text-sm font-medium mb-2">הודעה למייל (נמען ראשי)</label>
           <select id="sampleNotifyEmail" class="w-full px-4 py-2 border rounded-lg">
             <option value="">-- בחר איש קשר --</option>
             ${contactOptions}
           </select>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium mb-2">נמענים נוספים (CC)</label>
+          <input id="sampleCcEmails" type="text"
+            value="${escapeHtml(ccValue)}"
+            placeholder="example@cidev.co.il, someone@cidev.co.il"
+            class="w-full px-4 py-2 border rounded-lg">
+          <div class="text-xs text-gray-500 mt-1">הפרדה עם פסיק. ישלח גם אליהם בנוסף לנמען הראשי.</div>
         </div>
 
         <div>
@@ -656,6 +705,7 @@ function sendEmail(sample, oldStatus = null, newStatus) {
             <option value="">-- בחר איש קשר --</option>
             ${assignedOptions}
           </select>
+          <div class="text-xs text-gray-500 mt-1">מומלץ לבחור רק כשסטטוס "נמסר".</div>
         </div>
 
         <div class="mt-4 flex justify-end gap-3">
@@ -685,16 +735,24 @@ function sendEmail(sample, oldStatus = null, newStatus) {
       const notifyEmail = document.getElementById('sampleNotifyEmail').value;
       const assignedTo = document.getElementById('sampleAssigned').value || null;
 
+      const ccRaw = document.getElementById('sampleCcEmails')?.value || '';
+      const ccEmails = ccRaw.split(',').map(x => x.trim()).filter(Boolean);
+
       if (!name) return alert('יש להזין שם דוגמה');
+
+      // חובה לבחור "נמסר ל" כאשר סטטוס "נמסר"
+      if (status === 'delivered' && !assignedTo) {
+        return alert('כשסטטוס "נמסר" חובה לבחור למי נמסר הפריט.');
+      }
 
       const oldStatus = currentSample?.status || null;
 
       if (currentSample) {
-        Object.assign(currentSample, { name, supplier, quantity, status, notifyEmail, assignedTo });
+        Object.assign(currentSample, { name, supplier, quantity, status, notifyEmail, ccEmails, assignedTo });
       } else {
         const id = generateId("SMPL");   // פנימי
         const seq = nextSampleSeq();     // תצוגה 1,2,3...
-        samples.push({ id, seq, name, supplier, quantity, status, notifyEmail, assignedTo, date: new Date().toISOString() });
+        samples.push({ id, seq, name, supplier, quantity, status, notifyEmail, ccEmails, assignedTo, date: new Date().toISOString() });
       }
 
       const saved = await saveData();
@@ -867,11 +925,11 @@ function sendEmail(sample, oldStatus = null, newStatus) {
     window.closeModal = closeModal;
     window.showContactForm = showContactForm;
     window.clearContactForm = clearContactForm;
-    window.windowSaveContact = saveContact; // לא חובה
     window.saveContact = saveContact;
+
+    window.deleteEmailLogItem = deleteEmailLogItem;
+    window.clearEmailLog = clearEmailLog;
   </script>
 
 </body>
 </html>
-
-
