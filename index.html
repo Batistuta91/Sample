@@ -4,13 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>מעקב דוגמאות</title>
-
-  <!-- מונע 404 על favicon -->
   <link rel="icon" href="data:,">
-
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
-
   <style>
     body { font-family: system-ui, -apple-system, sans-serif; }
     select[multiple] { background-image: none !important; }
@@ -19,924 +15,153 @@
 
 <body class="min-h-screen bg-gray-50">
 
-  <!-- כותרת עליונה -->
-  <div class="bg-white border-b">
-    <div class="max-w-7xl mx-auto px-4 py-4">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 bg-gray-900 rounded-lg flex items-center justify-center">
-            <i data-lucide="package" class="w-6 h-6 text-white"></i>
-          </div>
-          <div>
-            <h1 class="text-2xl font-bold">מעקב דוגמאות</h1>
-
-            <!-- Record ID פנימי - מוסתר (לא מוצג למשתמש) -->
-            <div class="hidden" aria-hidden="true">
-              Record: <span id="ridBadge" class="font-mono">—</span>
-              <button id="copyRidBtn" class="ml-2 text-blue-600 hover:underline hidden">העתק</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="flex gap-3">
-          <button id="exportJsonBtn" class="px-4 py-2 text-gray-700 border rounded-lg hover:bg-gray-50 flex items-center gap-2">
-            <i data-lucide="download" class="w-4 h-4"></i>
-            ייצא ל-JSON
-          </button>
-          <button id="openContactsBtn" class="px-4 py-2 text-gray-700 border rounded-lg hover:bg-gray-50 flex items-center gap-2">
-            <i data-lucide="users" class="w-4 h-4"></i>
-            אנשי קשר (<span id="contactsCount">0</span>)
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- הודעת מצב -->
-  <div class="max-w-7xl mx-auto px-4 pt-4">
-    <div id="statusBanner" class="hidden rounded-lg border bg-white p-3 text-sm"></div>
-  </div>
-
-  <!-- תוכן ראשי -->
-  <div class="max-w-7xl mx-auto px-4 py-8" id="mainContent"></div>
-
-  <!-- מודל דוגמה -->
-  <div id="sampleModal" class="fixed inset-0 bg-black bg-opacity-50 items-center justify-center p-4 z-50 hidden">
-    <div class="bg-white rounded-xl max-w-md w-full p-6">
-      <div class="flex items-center justify-between mb-6">
-        <h3 class="text-xl font-bold" id="sampleModalTitle">דוגמה חדשה</h3>
-        <button id="closeSampleModal" class="text-gray-500 hover:text-gray-700">
-          <i data-lucide="x" class="w-6 h-6"></i>
-        </button>
-      </div>
-      <div class="space-y-4" id="sampleFormContent"></div>
-    </div>
-  </div>
-
-  <!-- מודל אנשי קשר -->
-  <div id="contactsModal" class="fixed inset-0 bg-black bg-opacity-50 items-center justify-center p-4 z-50 hidden">
-    <div class="bg-white rounded-xl max-w-3xl w-full p-6 max-h-[90vh] overflow-y-auto">
-      <div class="flex items-center justify-between mb-6">
-        <h3 class="text-xl font-bold">ניהול אנשי קשר</h3>
-        <button id="closeContactsModal" class="text-gray-500 hover:text-gray-700">
-          <i data-lucide="x" class="w-6 h-6"></i>
-        </button>
-      </div>
-
-      <button id="addContactBtn" class="mb-4 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 flex items-center gap-2">
-        <i data-lucide="plus" class="w-4 h-4"></i>
-        הוסף איש קשר
+<div class="bg-white border-b">
+  <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+    <h1 class="text-2xl font-bold flex items-center gap-2">
+      <i data-lucide="package"></i> מעקב דוגמאות
+    </h1>
+    <div class="flex gap-3">
+      <button id="exportJsonBtn" class="px-4 py-2 border rounded">ייצוא JSON</button>
+      <button id="openContactsBtn" class="px-4 py-2 border rounded">
+        אנשי קשר (<span id="contactsCount">0</span>)
       </button>
-
-      <div id="contactsFormSection" class="bg-gray-50 rounded-lg p-4 mb-6 hidden"></div>
-      <div id="contactsListSection" class="space-y-2"></div>
     </div>
   </div>
+</div>
 
-  <script>
-    // ==========================================
-    // CONFIG - MyJSON (V2) - בלי LocalStorage
-    // ==========================================
-    const COLLECTION_ID = "067b6138-3f46-42a8-971a-9d62ebab009f"; // שלך
-    const ACCESS_TOKEN = ""; // Public -> ריק
-    const API_BASE = "https://api.myjson.online/v2/records";
+<div class="max-w-7xl mx-auto px-4 py-6" id="mainContent"></div>
 
-    function apiHeaders() {
-      const h = { "Content-Type": "application/json" };
-      if (ACCESS_TOKEN && ACCESS_TOKEN.trim()) {
-        h["x-collection-access-token"] = ACCESS_TOKEN.trim();
-      }
-      return h;
-    }
+<!-- מודל דוגמה -->
+<div id="sampleModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+  <div class="bg-white rounded-xl p-6 w-full max-w-md">
+    <h3 id="sampleModalTitle" class="text-xl font-bold mb-4"></h3>
+    <div id="sampleFormContent" class="space-y-4"></div>
+  </div>
+</div>
 
-    function recordUrl(id) {
-      return `${API_BASE}/${id}`;
-    }
+<script>
+const statusOptions = [
+  { value: 'received', label: 'התקבל' },
+  { value: 'testing', label: 'בבדיקה' },
+  { value: 'delivered', label: 'נמסר' }
+];
 
-    // ==========================================
-    // Record ID דרך URL (לא לוקאלי)
-    // ==========================================
-    function getRidFromUrl() {
-      const u = new URL(window.location.href);
-      const rid = u.searchParams.get("rid");
-      return rid && rid.trim() ? rid.trim() : "";
-    }
+let samples = [];
+let contacts = [];
+let currentSample = null;
 
-    function setRidInUrl(rid) {
-      const u = new URL(window.location.href);
-      u.searchParams.set("rid", rid);
-      window.history.replaceState({}, "", u.toString());
-      updateRidUI(rid);
-    }
+function generateId(p){return p+'-'+Math.random().toString(36).slice(2,8)}
+function nextSeq(){return samples.reduce((m,s)=>Math.max(m,s.seq||0),0)+1}
 
-    function updateRidUI(rid) {
-      const badge = document.getElementById("ridBadge");
-      const copyBtn = document.getElementById("copyRidBtn");
-      if (!badge || !copyBtn) return;
-      badge.textContent = rid ? rid : "—";
-      if (rid) copyBtn.classList.remove("hidden");
-      else copyBtn.classList.add("hidden");
-    }
+function renderMain(){
+  document.getElementById('contactsCount').textContent = contacts.length;
 
-    function showBanner(html, type = "info") {
-      const el = document.getElementById("statusBanner");
-      el.classList.remove("hidden");
-      const base = "rounded-lg border p-3 text-sm";
-      const styles = {
-        info: "bg-white border-gray-200 text-gray-800",
-        ok: "bg-green-50 border-green-200 text-green-900",
-        warn: "bg-yellow-50 border-yellow-200 text-yellow-900",
-        err: "bg-red-50 border-red-200 text-red-900"
-      };
-      el.className = `${base} ${styles[type] || styles.info}`;
-      el.innerHTML = html;
-    }
+  document.getElementById('mainContent').innerHTML = `
+    <button onclick="openSampleModal()" class="mb-4 px-4 py-2 bg-black text-white rounded">
+      דוגמה חדשה
+    </button>
 
-    // ==========================================
-    // Data model
-    // ==========================================
-    const statusOptions = [
-      { value: 'received',  label: 'התקבל',  color: 'bg-blue-100 text-blue-800' },
-      { value: 'testing',   label: 'בבדיקה', color: 'bg-yellow-100 text-yellow-800' },
-      { value: 'delivered', label: 'נמסר',   color: 'bg-purple-100 text-purple-800' }
-    ];
+    <table class="w-full bg-white border rounded">
+      <thead class="bg-gray-50">
+        <tr>
+          <th class="p-2">שם</th>
+          <th class="p-2">ספק</th>
+          <th class="p-2">כמות</th>
+          <th class="p-2">תאריך קבלה</th>
+          <th class="p-2">סטטוס</th>
+          <th class="p-2">פעולות</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${samples.map(s=>`
+          <tr class="border-t">
+            <td class="p-2">${s.name}</td>
+            <td class="p-2">${s.supplier}</td>
+            <td class="p-2">${s.quantity}</td>
+            <td class="p-2">${new Date(s.date).toLocaleDateString('he-IL')}</td>
+            <td class="p-2">${statusOptions.find(o=>o.value===s.status)?.label}</td>
+            <td class="p-2">
+              <button onclick="openSampleModal('${s.id}')" class="text-blue-600">ערוך</button>
+            </td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+}
 
-    let samples = [];
-    let emailLog = [];
-    let contacts = [];
-    let currentSample = null;
-    let editingContact = null;
+function openSampleModal(id=null){
+  currentSample = id ? samples.find(s=>s.id===id) : null;
+  document.getElementById('sampleModalTitle').textContent =
+    currentSample ? 'עריכת דוגמה' : 'דוגמה חדשה';
 
-    function generateId(prefix = 'SMPL') {
-      return prefix + "-" + Date.now().toString(36).toUpperCase() + "-" + Math.random().toString(36).slice(2, 6).toUpperCase();
-    }
+  const d = currentSample?.date ? new Date(currentSample.date) : new Date();
+  const dateVal = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 
-    function nextSampleSeq() {
-      const maxSeq = samples.reduce((m, s) => Math.max(m, Number(s.seq || 0)), 0);
-      return maxSeq + 1;
-    }
+  document.getElementById('sampleFormContent').innerHTML = `
+    <input id="sampleName" placeholder="שם דוגמה" class="w-full border p-2 rounded"
+      value="${currentSample?.name||''}">
+    <input id="sampleSupplier" placeholder="ספק" class="w-full border p-2 rounded"
+      value="${currentSample?.supplier||''}">
+    <input id="sampleQuantity" type="number" class="w-full border p-2 rounded"
+      value="${currentSample?.quantity||0}">
+    <input id="sampleDate" type="date" class="w-full border p-2 rounded"
+      value="${dateVal}">
+    <select id="sampleStatus" class="w-full border p-2 rounded">
+      ${statusOptions.map(o=>`
+        <option value="${o.value}" ${currentSample?.status===o.value?'selected':''}>
+          ${o.label}
+        </option>`).join('')}
+    </select>
 
-    function escapeHtml(str) {
-      return String(str ?? "")
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
-    }
+    <div class="flex justify-end gap-2 pt-2">
+      <button onclick="closeModal()" class="px-4 py-2 border rounded">ביטול</button>
+      <button onclick="saveSample()" class="px-4 py-2 bg-black text-white rounded">שמור</button>
+    </div>
+  `;
 
-    function normalizeData(dataObj) {
-      const d = (dataObj && typeof dataObj === "object") ? dataObj : {};
+  document.getElementById('sampleModal').classList.remove('hidden');
+  document.getElementById('sampleModal').classList.add('flex');
+}
 
-      samples  = Array.isArray(d.samples)  ? d.samples  : [];
-      contacts = Array.isArray(d.contacts) ? d.contacts : [];
-      emailLog = Array.isArray(d.emailLog) ? d.emailLog : [];
+function closeModal(){
+  document.getElementById('sampleModal').classList.add('hidden');
+  document.getElementById('sampleModal').classList.remove('flex');
+  currentSample = null;
+}
 
-      samples = samples.map(s => ({
-        id: s.id || generateId("SMPL"),
-        seq: Number(s.seq || 0),
-        name: s.name || "",
-        supplier: s.supplier || "",
-        quantity: Number(s.quantity || 0),
-        status: s.status || "received",
-        notifyEmail: s.notifyEmail || "",
-        ccEmails: Array.isArray(s.ccEmails) ? s.ccEmails : [],     // ✅ נשמר בענן
-        assignedTo: s.assignedTo || null,
-        date: s.date || new Date().toISOString()
-      }));
+function saveSample(){
+  const name = sampleName.value.trim();
+  if(!name) return alert('שם חובה');
 
-      const needsSeq = samples.some(s => !s.seq);
-      if (needsSeq) {
-        const sorted = [...samples].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-        let i = 1;
-        for (const s of sorted) {
-          if (!s.seq) s.seq = i;
-          i = Math.max(i, s.seq + 1);
-        }
-        const mapById = new Map(sorted.map(s => [s.id, s]));
-        samples = samples.map(s => mapById.get(s.id) || s);
-      }
+  const dateIso = new Date(sampleDate.value+'T12:00:00').toISOString();
 
-      contacts = contacts.map(c => ({
-        id: c.id || generateId("C"),
-        name: c.name || "",
-        email: c.email || ""
-      }));
-    }
-
-    // ==========================================
-    // MyJSON - Create / Load / Save
-    // ==========================================
-    async function createRecord() {
-      const initData = {
-        samples: [],
-        contacts: [],
-        emailLog: [],
-        updateDate: new Date().toLocaleDateString("he-IL")
-      };
-
-      const res = await fetch(API_BASE, {
-        method: "POST",
-        headers: apiHeaders(),
-        body: JSON.stringify({
-          collectionId: COLLECTION_ID,
-          data: initData,
-          metadata: true
-        })
-      });
-
-      if (!res.ok) throw new Error(`${res.status} - ${await res.text()}`);
-      const created = await res.json();
-      const newId = created?.id;
-      if (!newId) throw new Error("נוצר Record אבל לא התקבל id מהשרת.");
-      return newId;
-    }
-
-    async function ensureRecordId() {
-      let rid = getRidFromUrl();
-      if (rid) {
-        updateRidUI(rid);
-        return rid;
-      }
-
-      showBanner(`יוצר מאגר נתונים חדש ומחבר את המערכת...`, "info");
-      const newId = await createRecord();
-      setRidInUrl(newId);
-      showBanner(`✅ נוצר מאגר נתונים חדש והמערכת מחוברת אליו.`, "ok");
-      return newId;
-    }
-
-    async function loadData() {
-      try {
-        const rid = await ensureRecordId();
-        const res = await fetch(recordUrl(rid), { method: "GET", headers: apiHeaders() });
-        if (!res.ok) throw new Error(`${res.status} - ${await res.text()}`);
-
-        const result = await res.json();
-        normalizeData(result.data);
-
-        // קיבוע seq אם היו רשומות ישנות
-        if (samples.some(s => s.seq)) {
-          await saveData();
-        }
-
-      } catch (err) {
-        console.error("⚠️ שגיאה בטעינת הנתונים:", err);
-        showBanner(
-          `❌ שגיאה בטעינת הנתונים מ-MyJSON.<br><br>
-           <div class="font-mono text-xs whitespace-pre-wrap">${escapeHtml(err.message)}</div>`,
-          "err"
-        );
-      }
-
-      renderMain();
-    }
-
-    async function saveData() {
-      try {
-        const rid = await ensureRecordId();
-
-        const fullData = {
-          samples,
-          contacts,
-          emailLog,
-          updateDate: new Date().toLocaleDateString("he-IL")
-        };
-
-        const res = await fetch(recordUrl(rid), {
-          method: "PUT",
-          headers: apiHeaders(),
-          body: JSON.stringify({ data: fullData, metadata: true })
-        });
-
-        if (!res.ok) throw new Error(`${res.status} - ${await res.text()}`);
-        await res.json();
-        return true;
-      } catch (err) {
-        console.error("❌ שגיאה בשמירה:", err);
-        showBanner(
-          `❌ שגיאה בשמירה ל-MyJSON.<br><br>
-           <div class="font-mono text-xs whitespace-pre-wrap">${escapeHtml(err.message)}</div>`,
-          "err"
-        );
-        return false;
-      }
-    }
-
-    // ==========================================
-    // Email helpers
-    // ==========================================
-    function rtl(line) { return '\u202B' + line; }
-
-    function buildEmailBody(sample, oldStatus, newStatus) {
-  const assignedName = sample.assignedTo
-    ? (contacts.find(c => c.id === sample.assignedTo)?.name || '—')
-    : '—';
-
-  let intro = '';
-  if (newStatus === 'received') {
-    intro = 'רציתי לעדכן כי דוגמה התקבלה במחסן.';
-  } else if (newStatus === 'testing') {
-    intro = 'עדכון סטטוס לגבי דוגמה שנמצאת בבדיקה במחסן.';
-  } else if (newStatus === 'delivered') {
-    intro = 'רציתי לעדכן כי הדוגמה נמסרה מהמחסן.';
+  if(currentSample){
+    Object.assign(currentSample,{
+      name,
+      supplier: sampleSupplier.value,
+      quantity:+sampleQuantity.value,
+      status: sampleStatus.value,
+      date: dateIso
+    });
   } else {
-    intro = 'עדכון סטטוס לגבי דוגמה במחסן.';
+    samples.push({
+      id: generateId('SMPL'),
+      seq: nextSeq(),
+      name,
+      supplier: sampleSupplier.value,
+      quantity:+sampleQuantity.value,
+      status: sampleStatus.value,
+      date: dateIso
+    });
   }
 
-  const lines = [
-    rtl('שלום,'),
-    '',
-    rtl(intro),
-    '',
-    rtl('פרטי הדוגמה:'),
-    rtl(`• דוגמה: ${sample.name}`),
-    rtl(`• ספק: ${sample.supplier || ''}`),
-    rtl(`• כמות: ${Number(sample.quantity || 0)}`),
-    rtl(`• תאריך קבלה: ${new Date(sample.date).toLocaleDateString('he-IL')}`)
-  ];
-
-  if (newStatus === 'delivered') {
-    lines.push(rtl(`• נמסר ל: ${assignedName}`));
-  }
-
-  lines.push(
-    '',
-    rtl('בברכה,'),
-    rtl('מחסן CIDEV')
-  );
-
-  return lines.join('\n');
-}
-
-// ⚠️ Outlook לפעמים דוחף body ל-CC אם משתמשים ב-cc=
-// לכן: כל הנמענים נכנסים ל-To בלבד
-function openEmailDraft({ toList, subject, body }) {
-  const to = (Array.isArray(toList) ? toList : [])
-    .map(x => (x || "").trim())
-    .filter(Boolean)
-    .join(";"); // Outlook אוהב ;
-
-  const url =
-    `mailto:${encodeURIComponent(to)}` +
-    `?subject=${encodeURIComponent(subject || '')}` +
-    `&body=${encodeURIComponent(body || '')}`;
-
-  window.location.href = url;
-}
-
-function sendEmail(sample, oldStatus = null, newStatus) {
-  const mainTo = (sample.notifyEmail || '').trim();
-  if (!mainTo) {
-    alert('לא נבחר נמען למייל (הודעה למייל). בחר איש קשר ואז שמור שוב.');
-    return;
-  }
-
-  const extra = Array.isArray(sample.ccEmails) ? sample.ccEmails : [];
-  const toList = Array.from(
-    new Set([mainTo, ...extra].map(x => (x || '').trim()).filter(Boolean))
-  );
-
-  const oldLabel = oldStatus
-    ? (statusOptions.find(s => s.value === oldStatus)?.label || oldStatus)
-    : 'חדש';
-  const newLabel =
-    statusOptions.find(s => s.value === newStatus)?.label || newStatus;
-
-  // ✅ בלי מספר דוגמה בנושא
-  const subject = `עדכון דוגמה - ${sample.name} (${oldLabel} → ${newLabel})`;
-
-  const body = buildEmailBody(sample, oldStatus, newStatus);
-
-  emailLog.push({
-    to: mainTo,
-    extra,
-    subject,
-    sampleId: sample.id,
-    timestamp: new Date().toISOString()
-  });
-
-  openEmailDraft({ toList, subject, body });
-}
-
-// ==========================================
-// Email log delete / clear
-// ==========================================
-async function deleteEmailLogItem(idxFromEnd) {
-  const realIndex = emailLog.length - 1 - idxFromEnd; // 0 = האחרון
-  if (realIndex < 0 || realIndex >= emailLog.length) return;
-
-  if (!confirm("למחוק רשומת מייל זו מהיומן?")) return;
-
-  emailLog.splice(realIndex, 1);
-  await saveData();
+  closeModal();
   renderMain();
 }
 
-
-    async function clearEmailLog() {
-      if (!confirm("לנקות את כל יומן המיילים?")) return;
-      emailLog = [];
-      await saveData();
-      renderMain();
-    }
-
-    // ==========================================
-    // Export
-    // ==========================================
-    function exportToJson() {
-      const data = { samples, contacts, emailLog };
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'samples_data.json';
-      a.click();
-      URL.revokeObjectURL(url);
-    }
-
-    // ==========================================
-    // UI - Render
-    // ==========================================
-    function renderMain() {
-      document.getElementById('contactsCount').textContent = contacts.length;
-
-      const stats = {
-        total: samples.length,
-        received: samples.filter(s => s.status === 'received').length,
-        testing: samples.filter(s => s.status === 'testing').length,
-        delivered: samples.filter(s => s.status === 'delivered').length
-      };
-
-      let filtered = samples;
-      const statusFilter = document.getElementById('statusFilter')?.value || 'all';
-      const searchTermRaw = (document.getElementById('searchInput')?.value || '');
-      const searchTerm = searchTermRaw.toLowerCase();
-
-      if (statusFilter !== 'all') filtered = filtered.filter(s => s.status === statusFilter);
-
-      if (searchTerm) {
-        filtered = filtered.filter(s =>
-          (s.name || '').toLowerCase().includes(searchTerm) ||
-          (s.supplier || '').toLowerCase().includes(searchTerm) ||
-          String(s.seq || '').includes(searchTermRaw.trim())
-        );
-      }
-
-      const tableRows = filtered.length === 0
-        ? `<tr><td colspan="7" class="px-6 py-12 text-center text-gray-500">אין דוגמאות להצגה</td></tr>`
-        : filtered.map(s => {
-            const status = statusOptions.find(st => st.value === s.status) || statusOptions[0];
-            const assigned = s.assignedTo ? (contacts.find(c => c.id === s.assignedTo)?.name || 'לא ידוע') : '-';
-            return `
-              <tr class="hover:bg-gray-50">
-                <td class="px-6 py-4">
-                  <div class="font-medium">${escapeHtml(s.name)}</div>
-                  <div class="text-sm text-gray-400">#${Number(s.seq || 0)}</div>
-                </td>
-                <td class="px-6 py-4">${escapeHtml(s.supplier)}</td>
-                <td class="px-6 py-4 text-gray-600">#${Number(s.quantity || 0)}</td>
-                <td class="px-6 py-4 text-gray-600">${new Date(s.date).toLocaleDateString('he-IL')}</td>
-                <td class="px-6 py-4"><span class="px-3 py-1 rounded-full text-sm ${status.color}">${status.label}</span></td>
-                <td class="px-6 py-4">
-                  <div class="flex items-center gap-2">
-                    <div class="w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center text-xs">👤</div>
-                    <span class="text-sm">${escapeHtml(assigned)}</span>
-                  </div>
-                </td>
-                <td class="px-6 py-4">
-                  <div class="flex items-center gap-3">
-                    <button onclick="openSampleModal('${s.id}')" class="text-blue-600 hover:text-blue-800">ערוך</button>
-                    <button onclick="deleteSample('${s.id}')" class="text-red-600 hover:text-red-800">מחק</button>
-                  </div>
-                </td>
-              </tr>`;
-          }).join('');
-
-      const emailLogHtml = emailLog.length > 0 ? `
-        <div class="mt-6 bg-white rounded-xl border p-6">
-          <div class="flex items-center justify-between mb-4">
-            <div class="flex items-center gap-2">
-              <i data-lucide="mail" class="w-5 h-5 text-gray-600"></i>
-              <h3 class="text-lg font-bold">יומן מיילים</h3>
-              <span class="text-sm text-gray-500">(${emailLog.length} נרשמו)</span>
-            </div>
-            <button onclick="clearEmailLog()" class="px-3 py-1 text-sm border rounded-lg hover:bg-gray-50">
-              נקה יומן
-            </button>
-          </div>
-
-          <div class="space-y-2 max-h-60 overflow-y-auto">
-            ${emailLog.slice(-8).reverse().map((e, idx) => `
-              <div class="p-3 bg-gray-50 rounded-lg text-sm">
-                <div class="flex justify-between mb-1 gap-3 items-start">
-                  <div class="font-medium">${escapeHtml(e.subject || '')}</div>
-
-                  <div class="flex items-center gap-3 whitespace-nowrap">
-                    <span class="text-gray-500">${new Date(e.timestamp).toLocaleString('he-IL')}</span>
-                    <button onclick="deleteEmailLogItem(${idx})"
-                      class="text-red-600 hover:text-red-800 text-xs border border-red-200 rounded px-2 py-1">
-                      מחק
-                    </button>
-                  </div>
-                </div>
-
-                <div class="text-gray-600">נמען ראשי: ${escapeHtml(e.to || '')}</div>
-                ${(Array.isArray(e.extra) && e.extra.length)
-                  ? `<div class="text-gray-500 text-xs mt-1">נמענים נוספים: ${escapeHtml(e.extra.join(', '))}</div>`
-                  : ``}
-              </div>
-            `).join('')}
-          </div>
-
-          <div class="text-xs text-gray-500 mt-3">* זה יומן סימולציה. שליחה אמיתית דורשת שרת/אוטומציה.</div>
-        </div>` : '';
-
-      document.getElementById('mainContent').innerHTML = `
-        <div class="flex items-center justify-between mb-6">
-          <div>
-            <h2 class="text-3xl font-bold mb-2">ניהול דוגמאות</h2>
-            <p class="text-gray-600">מעקב וניהול דוגמאות שהתקבלו בחברה</p>
-          </div>
-          <button id="newSampleBtn" class="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800">
-            <i data-lucide="plus" class="w-5 h-5"></i>
-            דוגמה חדשה
-          </button>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <div class="bg-white p-6 rounded-xl border">
-            <div class="flex justify-between mb-2">
-              <span class="text-gray-600">סה"כ</span>
-              <div class="w-10 h-10 bg-gray-900 rounded-lg flex items-center justify-center">
-                <i data-lucide="package" class="w-5 h-5 text-white"></i>
-              </div>
-            </div>
-            <div class="text-3xl font-bold">${stats.total}</div>
-          </div>
-
-          <div class="bg-white p-6 rounded-xl border">
-            <div class="flex justify-between mb-2">
-              <span class="text-gray-600">התקבל</span>
-              <div class="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
-                <i data-lucide="check-circle" class="w-5 h-5 text-white"></i>
-              </div>
-            </div>
-            <div class="text-3xl font-bold">${stats.received}</div>
-          </div>
-
-          <div class="bg-white p-6 rounded-xl border">
-            <div class="flex justify-between mb-2">
-              <span class="text-gray-600">בבדיקה</span>
-              <div class="w-10 h-10 bg-yellow-500 rounded-lg flex items-center justify-center">
-                <i data-lucide="clock" class="w-5 h-5 text-white"></i>
-              </div>
-            </div>
-            <div class="text-3xl font-bold">${stats.testing}</div>
-          </div>
-
-          <div class="bg-white p-6 rounded-xl border">
-            <div class="flex justify-between mb-2">
-              <span class="text-gray-600">נמסר</span>
-              <div class="w-10 h-10 bg-purple-500 rounded-lg flex items-center justify-center">
-                <i data-lucide="send" class="w-5 h-5 text-white"></i>
-              </div>
-            </div>
-            <div class="text-3xl font-bold">${stats.delivered}</div>
-          </div>
-        </div>
-
-        <div class="bg-white rounded-xl border mb-6 p-4">
-          <div class="flex flex-col sm:flex-row gap-4">
-            <select id="statusFilter" class="px-4 py-2 border rounded-lg">
-              <option value="all">כל הסטטוסים</option>
-              ${statusOptions.map(o => `<option value="${o.value}">${o.label}</option>`).join('')}
-            </select>
-
-            <div class="flex-1 relative">
-              <i data-lucide="search" class="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"></i>
-              <input id="searchInput" type="text" placeholder="חיפוש לפי שם, ספק או מספר דוגמה..." class="w-full pr-10 pl-4 py-2 border rounded-lg">
-            </div>
-          </div>
-        </div>
-
-        <div class="bg-white rounded-xl border overflow-hidden">
-          <table class="w-full">
-            <thead class="bg-gray-50 border-b">
-              <tr>
-                <th class="px-6 py-3 text-right text-sm font-medium text-gray-700">שם הדוגמה</th>
-                <th class="px-6 py-3 text-right text-sm font-medium text-gray-700">ספק</th>
-                <th class="px-6 py-3 text-right text-sm font-medium text-gray-700">כמות</th>
-                <th class="px-6 py-3 text-right text-sm font-medium text-gray-700">תאריך קבלה</th>
-                <th class="px-6 py-3 text-right text-sm font-medium text-gray-700">סטטוס</th>
-                <th class="px-6 py-3 text-right text-sm font-medium text-gray-700">נמסר ל</th>
-                <th class="px-6 py-3 text-right text-sm font-medium text-gray-700">פעולות</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y">${tableRows}</tbody>
-          </table>
-        </div>
-
-        ${emailLogHtml}
-      `;
-
-      lucide.createIcons();
-      document.getElementById('statusFilter')?.addEventListener('change', renderMain);
-      document.getElementById('searchInput')?.addEventListener('input', renderMain);
-      document.getElementById('newSampleBtn')?.addEventListener('click', () => openSampleModal());
-    }
-
-    // ==========================================
-    // Sample Modal
-    // ==========================================
-    function openSampleModal(id = null) {
-      currentSample = id ? samples.find(s => s.id === id) : null;
-      document.getElementById('sampleModalTitle').textContent = currentSample ? 'עריכת דוגמה' : 'דוגמה חדשה';
-
-      const contactOptions = contacts.map(c =>
-        `<option value="${escapeHtml(c.email)}" ${currentSample?.notifyEmail === c.email ? 'selected' : ''}>${escapeHtml(c.name)} - ${escapeHtml(c.email)}</option>`
-      ).join('');
-
-      const assignedOptions = contacts.map(c =>
-        `<option value="${escapeHtml(c.id)}" ${currentSample?.assignedTo === c.id ? 'selected' : ''}>${escapeHtml(c.name)}</option>`
-      ).join('');
-
-      const selectedLower = new Set((currentSample?.ccEmails || []).map(e => (e || '').toLowerCase()));
-      const ccOptions = contacts.map(c => {
-        const sel = selectedLower.has((c.email || '').toLowerCase()) ? 'selected' : '';
-        return `<option value="${escapeHtml(c.email)}" ${sel}>${escapeHtml(c.name)} - ${escapeHtml(c.email)}</option>`;
-      }).join('');
-
-      document.getElementById('sampleFormContent').innerHTML = `
-        ${currentSample ? `<div class="text-xs text-gray-500">מספר דוגמה: <b>#${Number(currentSample.seq || 0)}</b></div>` : ``}
-
-        <div>
-          <label class="block text-sm font-medium mb-2">שם הדוגמה</label>
-          <input id="sampleName" type="text" value="${escapeHtml(currentSample?.name || '')}" class="w-full px-4 py-2 border rounded-lg">
-        </div>
-
-        <div>
-          <label class="block text-sm font-medium mb-2">ספק</label>
-          <input id="sampleSupplier" type="text" value="${escapeHtml(currentSample?.supplier || '')}" class="w-full px-4 py-2 border rounded-lg">
-        </div>
-
-        <div>
-          <label class="block text-sm font-medium mb-2">כמות</label>
-          <input id="sampleQuantity" type="number" min="0" value="${Number(currentSample?.quantity || 0)}" class="w-full px-4 py-2 border rounded-lg">
-        </div>
-
-        <div>
-          <label class="block text-sm font-medium mb-2">סטטוס</label>
-          <select id="sampleStatus" class="w-full px-4 py-2 border rounded-lg">
-            ${statusOptions.map(o => `<option value="${o.value}" ${(currentSample?.status === o.value) || (!currentSample && o.value === 'received') ? 'selected' : ''}>${o.label}</option>`).join('')}
-          </select>
-        </div>
-
-        <div>
-          <label class="block text-sm font-medium mb-2">הודעה למייל (נמען ראשי)</label>
-          <select id="sampleNotifyEmail" class="w-full px-4 py-2 border rounded-lg">
-            <option value="">-- בחר איש קשר --</option>
-            ${contactOptions}
-          </select>
-        </div>
-
-        <div>
-          <label class="block text-sm font-medium mb-2">נמענים נוספים (לבחירה מתוך אנשי הקשר)</label>
-          <select id="sampleCcEmails" multiple class="w-full px-4 py-2 border rounded-lg h-28">
-            ${ccOptions}
-          </select>
-          <div class="text-xs text-gray-500 mt-1">אפשר לבחור כמה (Ctrl/Shift). בפועל הם ייכנסו יחד לשדה "אל" כדי למנוע באג של Outlook.</div>
-        </div>
-
-        <div>
-          <label class="block text-sm font-medium mb-2">נמסר ל</label>
-          <select id="sampleAssigned" class="w-full px-4 py-2 border rounded-lg">
-            <option value="">-- בחר איש קשר --</option>
-            ${assignedOptions}
-          </select>
-          <div class="text-xs text-gray-500 mt-1">כשסטטוס "נמסר" חובה לבחור למי נמסר.</div>
-        </div>
-
-        <div class="mt-4 flex justify-end gap-3">
-          <button onclick="closeModal('sampleModal')" class="px-4 py-2 border rounded-lg">בטל</button>
-          <button onclick="saveSample()" class="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800">שמור</button>
-        </div>
-      `;
-
-      document.getElementById('sampleModal').classList.remove('hidden');
-      document.getElementById('sampleModal').classList.add('flex');
-
-      lucide.createIcons();
-    }
-
-    function closeModal(modalId) {
-      document.getElementById(modalId).classList.add('hidden');
-      document.getElementById(modalId).classList.remove('flex');
-      currentSample = null;
-      editingContact = null;
-    }
-
-    async function saveSample() {
-      const name = document.getElementById('sampleName').value.trim();
-      const supplier = document.getElementById('sampleSupplier').value.trim();
-      const quantity = parseInt(document.getElementById('sampleQuantity').value, 10) || 0;
-      const status = document.getElementById('sampleStatus').value;
-      const notifyEmail = document.getElementById('sampleNotifyEmail').value;
-      const assignedTo = document.getElementById('sampleAssigned').value || null;
-
-      const ccSel = document.getElementById('sampleCcEmails');
-      const ccEmails = ccSel ? Array.from(ccSel.selectedOptions).map(o => (o.value || '').trim()).filter(Boolean) : [];
-
-      if (!name) return alert('יש להזין שם דוגמה');
-
-      if (status === 'delivered' && !assignedTo) {
-        return alert('כשסטטוס "נמסר" חובה לבחור למי נמסר הפריט.');
-      }
-
-      const oldStatus = currentSample?.status || null;
-
-      if (currentSample) {
-        Object.assign(currentSample, { name, supplier, quantity, status, notifyEmail, ccEmails, assignedTo });
-      } else {
-        const id = generateId("SMPL");
-        const seq = nextSampleSeq();
-        samples.push({ id, seq, name, supplier, quantity, status, notifyEmail, ccEmails, assignedTo, date: new Date().toISOString() });
-      }
-
-      const saved = await saveData();
-
-      if (saved && status !== oldStatus) {
-        const sampleRef = currentSample || samples[samples.length - 1];
-        sendEmail(sampleRef, oldStatus, status);
-        await saveData();
-      }
-
-      closeModal('sampleModal');
-      renderMain();
-    }
-
-    async function deleteSample(id) {
-      if (!confirm("למחוק דוגמה זו?")) return;
-      samples = samples.filter(s => s.id !== id);
-      await saveData();
-      renderMain();
-    }
-
-    // ==========================================
-    // Contacts Modal
-    // ==========================================
-    function openContactsModal() {
-      renderContacts();
-      document.getElementById('contactsModal').classList.remove('hidden');
-      document.getElementById('contactsModal').classList.add('flex');
-      lucide.createIcons();
-    }
-
-    function renderContacts() {
-      document.getElementById('contactsCount').textContent = contacts.length;
-
-      const section = document.getElementById('contactsListSection');
-      section.innerHTML = contacts.length === 0
-        ? `<div class="text-gray-500 text-center py-4">אין אנשי קשר. לחץ על "הוסף איש קשר" כדי להתחיל.</div>`
-        : contacts.map(c => `
-          <div class="flex justify-between items-center bg-gray-50 p-3 rounded-lg">
-            <div>
-              <span class="font-medium">${escapeHtml(c.name)}</span>
-              <span class="text-gray-400">•</span>
-              <span class="text-gray-600">${escapeHtml(c.email)}</span>
-            </div>
-            <div class="flex gap-2">
-              <button onclick="editContact('${escapeHtml(c.id)}')" class="text-blue-600 hover:text-blue-800 px-3 py-1">ערוך</button>
-              <button onclick="deleteContact('${escapeHtml(c.id)}')" class="text-red-600 hover:text-red-800 px-3 py-1">מחק</button>
-            </div>
-          </div>
-        `).join('');
-
-      document.getElementById('addContactBtn').onclick = () => showContactForm();
-    }
-
-    function showContactForm(contactId = null) {
-      editingContact = contactId ? contacts.find(c => c.id === contactId) : null;
-
-      const section = document.getElementById('contactsFormSection');
-      section.classList.remove('hidden');
-      section.innerHTML = `
-        <h4 class="font-bold mb-3">${editingContact ? 'עריכת איש קשר' : 'איש קשר חדש'}</h4>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label class="block text-sm font-medium mb-2">שם מלא</label>
-            <input id="contactName" type="text" placeholder="שם פרטי ומשפחה" value="${escapeHtml(editingContact?.name || '')}" class="w-full px-4 py-2 border rounded-lg">
-          </div>
-
-          <div>
-            <label class="block text-sm font-medium mb-2">כתובת מייל</label>
-            <input id="contactEmail" type="email" placeholder="example@company.com" value="${escapeHtml(editingContact?.email || '')}" class="w-full px-4 py-2 border rounded-lg">
-          </div>
-        </div>
-
-        <div class="mt-4 flex justify-end gap-3">
-          <button onclick="clearContactForm()" class="px-4 py-2 border rounded-lg hover:bg-gray-50">בטל</button>
-          <button onclick="saveContact()" class="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800">שמור</button>
-        </div>
-      `;
-    }
-
-    function editContact(id) { showContactForm(id); }
-
-    function clearContactForm() {
-      editingContact = null;
-      document.getElementById('contactsFormSection').classList.add('hidden');
-      document.getElementById('contactsFormSection').innerHTML = '';
-    }
-
-    async function saveContact() {
-      const name = document.getElementById('contactName')?.value.trim();
-      const email = document.getElementById('contactEmail')?.value.trim();
-
-      if (!name || !email) return alert('יש למלא שם ומייל');
-      if (!email.includes('@')) return alert('כתובת מייל לא תקינה');
-
-      const emailLower = email.toLowerCase();
-      const duplicate = contacts.find(c => c.email?.toLowerCase() === emailLower && (!editingContact || c.id !== editingContact.id));
-      if (duplicate) return alert('כבר קיים איש קשר עם מייל זה.');
-
-      if (editingContact) Object.assign(editingContact, { name, email });
-      else contacts.push({ id: generateId('C'), name, email });
-
-      const saved = await saveData();
-      if (saved) {
-        clearContactForm();
-        renderContacts();
-        renderMain();
-        alert('✅ איש הקשר נשמר בהצלחה!');
-      }
-    }
-
-    async function deleteContact(id) {
-      if (!confirm("למחוק איש קשר זה?")) return;
-
-      contacts = contacts.filter(c => c.id !== id);
-      samples = samples.map(s => (s.assignedTo === id ? { ...s, assignedTo: null } : s));
-
-      const saved = await saveData();
-      if (saved) {
-        renderContacts();
-        renderMain();
-        alert('✅ איש הקשר נמחק בהצלחה!');
-      }
-    }
-
-    // ==========================================
-    // Events + init
-    // ==========================================
-    document.getElementById('exportJsonBtn').addEventListener('click', exportToJson);
-    document.getElementById('openContactsBtn').addEventListener('click', openContactsModal);
-    document.getElementById('closeContactsModal').addEventListener('click', () => closeModal('contactsModal'));
-    document.getElementById('closeSampleModal').addEventListener('click', () => closeModal('sampleModal'));
-
-    document.getElementById('sampleModal').addEventListener('click', (e) => {
-      if (e.target.id === "sampleModal") closeModal("sampleModal");
-    });
-    document.getElementById('contactsModal').addEventListener('click', (e) => {
-      if (e.target.id === "contactsModal") closeModal("contactsModal");
-    });
-
-    const copyBtn = document.getElementById("copyRidBtn");
-    if (copyBtn) {
-      copyBtn.addEventListener("click", async () => {
-        const rid = getRidFromUrl();
-        if (!rid) return;
-        try {
-          await navigator.clipboard.writeText(rid);
-          showBanner("✅ ה־Record ID הועתק.", "ok");
-        } catch {
-          alert("לא ניתן להעתיק אוטומטית. העתק ידנית מהשורה למעלה.");
-        }
-      });
-    }
-
-    document.addEventListener("DOMContentLoaded", () => {
-      lucide.createIcons();
-      updateRidUI(getRidFromUrl());
-      loadData();
-    });
-
-    // חשיפת פונקציות ל-onclick
-    window.openSampleModal = openSampleModal;
-    window.deleteSample = deleteSample;
-    window.editContact = editContact;
-    window.deleteContact = deleteContact;
-    window.saveSample = saveSample;
-    window.closeModal = closeModal;
-    window.showContactForm = showContactForm;
-    window.clearContactForm = clearContactForm;
-    window.saveContact = saveContact;
-
-    window.deleteEmailLogItem = deleteEmailLogItem;
-    window.clearEmailLog = clearEmailLog;
-  </script>
-
+renderMain();
+lucide.createIcons();
+</script>
 </body>
 </html>
-
