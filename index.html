@@ -28,7 +28,9 @@
           </div>
           <div>
             <h1 class="text-2xl font-bold">מעקב דוגמאות</h1>
-            <div class="text-xs text-gray-500 mt-0.5">
+
+            <!-- Record ID פנימי - מוסתר (לא מוצג למשתמש) -->
+            <div class="hidden" aria-hidden="true">
               Record: <span id="ridBadge" class="font-mono">—</span>
               <button id="copyRidBtn" class="ml-2 text-blue-600 hover:underline hidden">העתק</button>
             </div>
@@ -128,14 +130,13 @@
     }
 
     function updateRidUI(rid) {
+      // נשאר פנימי בלבד (ה־UI מוסתר)
       const badge = document.getElementById("ridBadge");
       const copyBtn = document.getElementById("copyRidBtn");
+      if (!badge || !copyBtn) return;
       badge.textContent = rid ? rid : "—";
-      if (rid) {
-        copyBtn.classList.remove("hidden");
-      } else {
-        copyBtn.classList.add("hidden");
-      }
+      if (rid) copyBtn.classList.remove("hidden");
+      else copyBtn.classList.add("hidden");
     }
 
     function showBanner(html, type = "info") {
@@ -171,6 +172,12 @@
       return prefix + "-" + Date.now().toString(36).toUpperCase() + "-" + Math.random().toString(36).slice(2, 6).toUpperCase();
     }
 
+    // מספר רץ פשוט לתצוגה (1,2,3...) שנשמר בענן
+    function nextSampleSeq() {
+      const maxSeq = samples.reduce((m, s) => Math.max(m, Number(s.seq || 0)), 0);
+      return maxSeq + 1;
+    }
+
     function escapeHtml(str) {
       return String(str ?? "")
         .replaceAll("&", "&amp;")
@@ -188,7 +195,8 @@
       emailLog = Array.isArray(d.emailLog) ? d.emailLog : [];
 
       samples = samples.map(s => ({
-        id: s.id || generateId("SMPL"),
+        id: s.id || generateId("SMPL"),     // פנימי בלבד
+        seq: Number(s.seq || 0),            // מספר רץ לתצוגה
         name: s.name || "",
         supplier: s.supplier || "",
         quantity: Number(s.quantity || 0),
@@ -197,6 +205,21 @@
         assignedTo: s.assignedTo || null,
         date: s.date || new Date().toISOString()
       }));
+
+      // אם יש רשומות ישנות בלי seq - נשלים בצורה יציבה (מינימום נזק)
+      // נשמור סידור לפי תאריך יצירה ואז נקצה רציף
+      const needsSeq = samples.some(s => !s.seq);
+      if (needsSeq) {
+        const sorted = [...samples].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        let i = 1;
+        for (const s of sorted) {
+          if (!s.seq) s.seq = i;
+          i = Math.max(i, s.seq + 1);
+        }
+        // נעתיק חזרה לפי id
+        const mapById = new Map(sorted.map(s => [s.id, s]));
+        samples = samples.map(s => mapById.get(s.id) || s);
+      }
 
       contacts = contacts.map(c => ({
         id: c.id || generateId("C"),
@@ -240,19 +263,14 @@
         return rid;
       }
 
-      showBanner(
-        `לא נמצא <b>rid</b> בכתובת, יוצר Record חדש בקולקשן שלך...`,
-        "info"
-      );
+      // הודעה בלי לחשוף rid
+      showBanner(`יוצר מאגר נתונים חדש ומחבר את המערכת...`, "info");
 
       const newId = await createRecord();
       setRidInUrl(newId);
 
-      showBanner(
-        `✅ נוצר Record חדש והמערכת מחוברת אליו.<br>
-         שמור את הלינק הזה (כולל <b>?rid=</b>) כדי לעבוד תמיד על אותו מידע.`,
-        "ok"
-      );
+      // בלי להציג rid
+      showBanner(`✅ נוצר מאגר נתונים חדש והמערכת מחוברת אליו.`, "ok");
 
       return newId;
     }
@@ -266,6 +284,12 @@
 
         const result = await res.json();
         normalizeData(result.data);
+
+        // אם הוספנו seq לרשומות ישנות - נשמור פעם אחת כדי לקבע
+        if (samples.some(s => s.seq)) {
+          // לא חובה, אבל עוזר שהמספרים יישמרו יציב תמיד
+          await saveData();
+        }
 
       } catch (err) {
         console.error("⚠️ שגיאה בטעינת הנתונים:", err);
@@ -353,14 +377,16 @@
 
       let filtered = samples;
       const statusFilter = document.getElementById('statusFilter')?.value || 'all';
-      const searchTerm = (document.getElementById('searchInput')?.value || '').toLowerCase();
+      const searchTermRaw = (document.getElementById('searchInput')?.value || '');
+      const searchTerm = searchTermRaw.toLowerCase();
 
       if (statusFilter !== 'all') filtered = filtered.filter(s => s.status === statusFilter);
+
       if (searchTerm) {
         filtered = filtered.filter(s =>
           (s.name || '').toLowerCase().includes(searchTerm) ||
           (s.supplier || '').toLowerCase().includes(searchTerm) ||
-          (s.id || '').toLowerCase().includes(searchTerm)
+          String(s.seq || '').includes(searchTermRaw.trim()) // חיפוש לפי מספר רץ
         );
       }
 
@@ -373,7 +399,7 @@
               <tr class="hover:bg-gray-50">
                 <td class="px-6 py-4">
                   <div class="font-medium">${escapeHtml(s.name)}</div>
-                  <div class="text-sm text-gray-500">${escapeHtml(s.id)}</div>
+                  <div class="text-sm text-gray-400">#${Number(s.seq || 0)}</div>
                 </td>
                 <td class="px-6 py-4">${escapeHtml(s.supplier)}</td>
                 <td class="px-6 py-4 text-gray-600">#${Number(s.quantity || 0)}</td>
@@ -478,7 +504,7 @@
 
             <div class="flex-1 relative">
               <i data-lucide="search" class="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"></i>
-              <input id="searchInput" type="text" placeholder="חיפוש לפי שם, ספק או ID..." class="w-full pr-10 pl-4 py-2 border rounded-lg">
+              <input id="searchInput" type="text" placeholder="חיפוש לפי שם, ספק או מספר דוגמה..." class="w-full pr-10 pl-4 py-2 border rounded-lg">
             </div>
           </div>
         </div>
@@ -525,6 +551,8 @@
       ).join('');
 
       document.getElementById('sampleFormContent').innerHTML = `
+        ${currentSample ? `<div class="text-xs text-gray-500">מספר דוגמה: <b>#${Number(currentSample.seq || 0)}</b></div>` : ``}
+
         <div>
           <label class="block text-sm font-medium mb-2">שם הדוגמה</label>
           <input id="sampleName" type="text" value="${escapeHtml(currentSample?.name || '')}" class="w-full px-4 py-2 border rounded-lg">
@@ -597,8 +625,9 @@
       if (currentSample) {
         Object.assign(currentSample, { name, supplier, quantity, status, notifyEmail, assignedTo });
       } else {
-        const id = generateId("SMPL");
-        samples.push({ id, name, supplier, quantity, status, notifyEmail, assignedTo, date: new Date().toISOString() });
+        const id = generateId("SMPL");   // פנימי
+        const seq = nextSampleSeq();     // תצוגה 1,2,3...
+        samples.push({ id, seq, name, supplier, quantity, status, notifyEmail, assignedTo, date: new Date().toISOString() });
       }
 
       const saved = await saveData();
@@ -740,16 +769,20 @@
       if (e.target.id === "contactsModal") closeModal("contactsModal");
     });
 
-    document.getElementById("copyRidBtn").addEventListener("click", async () => {
-      const rid = getRidFromUrl();
-      if (!rid) return;
-      try {
-        await navigator.clipboard.writeText(rid);
-        showBanner("✅ ה־Record ID הועתק.", "ok");
-      } catch {
-        alert("לא ניתן להעתיק אוטומטית. העתק ידנית מהשורה למעלה.");
-      }
-    });
+    // הכפתור וה־UI של copyRid מוסתרים, אבל נשאיר שקט (בלי לזרוק שגיאה)
+    const copyBtn = document.getElementById("copyRidBtn");
+    if (copyBtn) {
+      copyBtn.addEventListener("click", async () => {
+        const rid = getRidFromUrl();
+        if (!rid) return;
+        try {
+          await navigator.clipboard.writeText(rid);
+          showBanner("✅ ה־Record ID הועתק.", "ok");
+        } catch {
+          alert("לא ניתן להעתיק אוטומטית. העתק ידנית מהשורה למעלה.");
+        }
+      });
+    }
 
     document.addEventListener("DOMContentLoaded", () => {
       lucide.createIcons();
@@ -767,6 +800,7 @@
     window.closeModal = closeModal;
     window.showContactForm = showContactForm;
     window.clearContactForm = clearContactForm;
+    window.windowSaveContact = saveContact; // לא חובה
     window.saveContact = saveContact;
   </script>
 
