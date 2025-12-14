@@ -329,98 +329,110 @@
     function rtl(line) { return '\u202B' + line; }
 
     function buildEmailBody(sample, oldStatus, newStatus) {
-      const assignedName = sample.assignedTo
-        ? (contacts.find(c => c.id === sample.assignedTo)?.name || '—')
-        : '—';
+  const assignedName = sample.assignedTo
+    ? (contacts.find(c => c.id === sample.assignedTo)?.name || '—')
+    : '—';
 
-      let intro = '';
-      if (newStatus === 'received') {
-        intro = 'רציתי לעדכן כי דוגמה התקבלה במחסן.';
-      } else if (newStatus === 'testing') {
-        intro = 'עדכון סטטוס לגבי דוגמה שנמצאת בבדיקה במחסן.';
-      } else if (newStatus === 'delivered') {
-        intro = 'רציתי לעדכן כי הדוגמה נמסרה מהמחסן.';
-      } else {
-        intro = 'עדכון סטטוס לגבי דוגמה במחסן.';
-      }
+  let intro = '';
+  if (newStatus === 'received') {
+    intro = 'רציתי לעדכן כי דוגמה התקבלה במחסן.';
+  } else if (newStatus === 'testing') {
+    intro = 'עדכון סטטוס לגבי דוגמה שנמצאת בבדיקה במחסן.';
+  } else if (newStatus === 'delivered') {
+    intro = 'רציתי לעדכן כי הדוגמה נמסרה מהמחסן.';
+  } else {
+    intro = 'עדכון סטטוס לגבי דוגמה במחסן.';
+  }
 
-      const lines = [
-        rtl('שלום,'),
-        '',
-        rtl(intro),
-        '',
-        rtl('פרטי הדוגמה:'),
-        rtl(`• דוגמה: ${sample.name}`),
-        rtl(`• מספר דוגמה: #${Number(sample.seq || 0)}`),
-        rtl(`• ספק: ${sample.supplier || ''}`),
-        rtl(`• כמות: ${Number(sample.quantity || 0)}`),
-        rtl(`• תאריך קבלה: ${new Date(sample.date).toLocaleDateString('he-IL')}`)
-      ];
+  const lines = [
+    rtl('שלום,'),
+    '',
+    rtl(intro),
+    '',
+    rtl('פרטי הדוגמה:'),
+    rtl(`• דוגמה: ${sample.name}`),
+    rtl(`• ספק: ${sample.supplier || ''}`),
+    rtl(`• כמות: ${Number(sample.quantity || 0)}`),
+    rtl(`• תאריך קבלה: ${new Date(sample.date).toLocaleDateString('he-IL')}`)
+  ];
 
-      if (newStatus === 'delivered') {
-        lines.push(rtl(`• נמסר ל: ${assignedName}`));
-      }
+  if (newStatus === 'delivered') {
+    lines.push(rtl(`• נמסר ל: ${assignedName}`));
+  }
 
-      lines.push('', rtl('בברכה,'), rtl('מחסן CIDEV'));
-      return lines.join('\n');
-    }
+  lines.push(
+    '',
+    rtl('בברכה,'),
+    rtl('מחסן CIDEV')
+  );
 
-    // ✅ Outlook לפעמים דוחף body ל-CC אם מוסיפים cc= ב-mailto.
-    // לכן: שמים את כל הנמענים ב-To (ראשי + נוספים), בלי cc= בכלל.
-    function openEmailDraft({ toList, subject, body }) {
-      const to = (Array.isArray(toList) ? toList : [])
-        .map(x => (x || "").trim())
-        .filter(Boolean)
-        .join(";"); // ב-Outlook ; הכי בטוח
+  return lines.join('\n');
+}
 
-      const url =
-        `mailto:${encodeURIComponent(to)}` +
-        `?subject=${encodeURIComponent(subject || '')}` +
-        `&body=${encodeURIComponent(body || '')}`;
+// ⚠️ Outlook לפעמים דוחף body ל-CC אם משתמשים ב-cc=
+// לכן: כל הנמענים נכנסים ל-To בלבד
+function openEmailDraft({ toList, subject, body }) {
+  const to = (Array.isArray(toList) ? toList : [])
+    .map(x => (x || "").trim())
+    .filter(Boolean)
+    .join(";"); // Outlook אוהב ;
 
-      window.location.href = url;
-    }
+  const url =
+    `mailto:${encodeURIComponent(to)}` +
+    `?subject=${encodeURIComponent(subject || '')}` +
+    `&body=${encodeURIComponent(body || '')}`;
 
-    function sendEmail(sample, oldStatus = null, newStatus) {
-      const mainTo = (sample.notifyEmail || '').trim();
-      if (!mainTo) {
-        alert('לא נבחר נמען למייל (הודעה למייל). בחר איש קשר ואז שמור שוב.');
-        return;
-      }
+  window.location.href = url;
+}
 
-      const extra = Array.isArray(sample.ccEmails) ? sample.ccEmails : [];
-      const toList = Array.from(new Set([mainTo, ...extra].map(x => (x || '').trim()).filter(Boolean)));
+function sendEmail(sample, oldStatus = null, newStatus) {
+  const mainTo = (sample.notifyEmail || '').trim();
+  if (!mainTo) {
+    alert('לא נבחר נמען למייל (הודעה למייל). בחר איש קשר ואז שמור שוב.');
+    return;
+  }
 
-      const oldLabel = oldStatus ? (statusOptions.find(s => s.value === oldStatus)?.label || oldStatus) : 'חדש';
-      const newLabel = statusOptions.find(s => s.value === newStatus)?.label || newStatus;
+  const extra = Array.isArray(sample.ccEmails) ? sample.ccEmails : [];
+  const toList = Array.from(
+    new Set([mainTo, ...extra].map(x => (x || '').trim()).filter(Boolean))
+  );
 
-      const subject = `עדכון דוגמה #${sample.seq || ''} - ${sample.name} (${oldLabel} → ${newLabel})`;
-      const body = buildEmailBody(sample, oldStatus, newStatus);
+  const oldLabel = oldStatus
+    ? (statusOptions.find(s => s.value === oldStatus)?.label || oldStatus)
+    : 'חדש';
+  const newLabel =
+    statusOptions.find(s => s.value === newStatus)?.label || newStatus;
 
-      emailLog.push({
-        to: mainTo,
-        extra,
-        subject,
-        sampleId: sample.id,
-        timestamp: new Date().toISOString()
-      });
+  // ✅ בלי מספר דוגמה בנושא
+  const subject = `עדכון דוגמה - ${sample.name} (${oldLabel} → ${newLabel})`;
 
-      openEmailDraft({ toList, subject, body });
-    }
+  const body = buildEmailBody(sample, oldStatus, newStatus);
 
-    // ==========================================
-    // Email log delete / clear
-    // ==========================================
-    async function deleteEmailLogItem(idxFromEnd) {
-      const realIndex = emailLog.length - 1 - idxFromEnd; // 0=האחרון
-      if (realIndex < 0 || realIndex >= emailLog.length) return;
+  emailLog.push({
+    to: mainTo,
+    extra,
+    subject,
+    sampleId: sample.id,
+    timestamp: new Date().toISOString()
+  });
 
-      if (!confirm("למחוק רשומת מייל זו מהיומן?")) return;
+  openEmailDraft({ toList, subject, body });
+}
 
-      emailLog.splice(realIndex, 1);
-      await saveData();
-      renderMain();
-    }
+// ==========================================
+// Email log delete / clear
+// ==========================================
+async function deleteEmailLogItem(idxFromEnd) {
+  const realIndex = emailLog.length - 1 - idxFromEnd; // 0 = האחרון
+  if (realIndex < 0 || realIndex >= emailLog.length) return;
+
+  if (!confirm("למחוק רשומת מייל זו מהיומן?")) return;
+
+  emailLog.splice(realIndex, 1);
+  await saveData();
+  renderMain();
+}
+
 
     async function clearEmailLog() {
       if (!confirm("לנקות את כל יומן המיילים?")) return;
@@ -927,3 +939,4 @@
 
 </body>
 </html>
+
