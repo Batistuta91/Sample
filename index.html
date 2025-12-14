@@ -26,8 +26,15 @@
           <div class="w-10 h-10 bg-gray-900 rounded-lg flex items-center justify-center">
             <i data-lucide="package" class="w-6 h-6 text-white"></i>
           </div>
-          <h1 class="text-2xl font-bold">מעקב דוגמאות</h1>
+          <div>
+            <h1 class="text-2xl font-bold">מעקב דוגמאות</h1>
+            <div class="text-xs text-gray-500 mt-0.5">
+              Record: <span id="ridBadge" class="font-mono">—</span>
+              <button id="copyRidBtn" class="ml-2 text-blue-600 hover:underline hidden">העתק</button>
+            </div>
+          </div>
         </div>
+
         <div class="flex gap-3">
           <button id="exportJsonBtn" class="px-4 py-2 text-gray-700 border rounded-lg hover:bg-gray-50 flex items-center gap-2">
             <i data-lucide="download" class="w-4 h-4"></i>
@@ -40,6 +47,11 @@
         </div>
       </div>
     </div>
+  </div>
+
+  <!-- הודעת מצב -->
+  <div class="max-w-7xl mx-auto px-4 pt-4">
+    <div id="statusBanner" class="hidden rounded-lg border bg-white p-3 text-sm"></div>
   </div>
 
   <!-- תוכן ראשי -->
@@ -80,19 +92,10 @@
 
   <script>
     // ==========================================
-    // CONFIG - MyJSON (V2)
+    // CONFIG - MyJSON (V2) - בלי LocalStorage
     // ==========================================
-    // אופציה 1: יש לך Record קיים -> הדבק כאן
-    // אופציה 2: אין לך Record -> השאר ריק, ותן COLLECTION_ID (והמערכת תיצור לבד)
-    const STORAGE_KEY_RECORD = "SAMPLES_RECORD_ID";
-
-    const RECORD_ID_FALLBACK = ""; // אם תרצה "לקבע" ידנית, תדביק כאן
-    const COLLECTION_ID = "";      // מומלץ למלא כדי לאפשר יצירה אוטומטית (UUID של Collection)
-
-    // אם הקולקשן PRIVATE תצטרך Access Token אמיתי של הקולקשן.
-    // זה לא recordId.
-    const ACCESS_TOKEN = ""; // x-collection-access-token (רק אם צריך)
-
+    const COLLECTION_ID = "067b6138-3f46-42a8-971a-9d62ebab009f"; // שלך
+    const ACCESS_TOKEN = ""; // Public -> ריק
     const API_BASE = "https://api.myjson.online/v2/records";
 
     function apiHeaders() {
@@ -103,18 +106,55 @@
       return h;
     }
 
-    function getRecordId() {
-      return localStorage.getItem(STORAGE_KEY_RECORD) || RECORD_ID_FALLBACK || "";
-    }
-
-    function setRecordId(id) {
-      if (id) localStorage.setItem(STORAGE_KEY_RECORD, id);
-    }
-
     function recordUrl(id) {
       return `${API_BASE}/${id}`;
     }
 
+    // ==========================================
+    // Record ID דרך URL (לא לוקאלי)
+    // ==========================================
+    function getRidFromUrl() {
+      const u = new URL(window.location.href);
+      const rid = u.searchParams.get("rid");
+      return rid && rid.trim() ? rid.trim() : "";
+    }
+
+    function setRidInUrl(rid) {
+      const u = new URL(window.location.href);
+      u.searchParams.set("rid", rid);
+      // לא ריפרש, לא היסטוריה חדשה
+      window.history.replaceState({}, "", u.toString());
+      updateRidUI(rid);
+    }
+
+    function updateRidUI(rid) {
+      const badge = document.getElementById("ridBadge");
+      const copyBtn = document.getElementById("copyRidBtn");
+      badge.textContent = rid ? rid : "—";
+      if (rid) {
+        copyBtn.classList.remove("hidden");
+      } else {
+        copyBtn.classList.add("hidden");
+      }
+    }
+
+    function showBanner(html, type = "info") {
+      const el = document.getElementById("statusBanner");
+      el.classList.remove("hidden");
+      const base = "rounded-lg border p-3 text-sm";
+      const styles = {
+        info: "bg-white border-gray-200 text-gray-800",
+        ok: "bg-green-50 border-green-200 text-green-900",
+        warn: "bg-yellow-50 border-yellow-200 text-yellow-900",
+        err: "bg-red-50 border-red-200 text-red-900"
+      };
+      el.className = `${base} ${styles[type] || styles.info}`;
+      el.innerHTML = html;
+    }
+
+    // ==========================================
+    // Data model
+    // ==========================================
     const statusOptions = [
       { value: 'received',  label: 'התקבל',  color: 'bg-blue-100 text-blue-800' },
       { value: 'testing',   label: 'בבדיקה', color: 'bg-yellow-100 text-yellow-800' },
@@ -165,15 +205,10 @@
       }));
     }
 
-    async function createRecordIfNeeded() {
-      const existingId = getRecordId();
-      if (existingId) return existingId;
-
-      if (!COLLECTION_ID) {
-        throw new Error("אין RECORD_ID וגם אין COLLECTION_ID כדי ליצור Record חדש אוטומטית.");
-      }
-
-      // לפי הדוקומנטציה: POST /v2/records עם collectionId ו-data :contentReference[oaicite:3]{index=3}
+    // ==========================================
+    // MyJSON - Create / Load / Save
+    // ==========================================
+    async function createRecord() {
       const initData = {
         samples: [],
         contacts: [],
@@ -195,45 +230,49 @@
       const created = await res.json();
       const newId = created?.id;
       if (!newId) throw new Error("נוצר Record אבל לא התקבל id מהשרת.");
+      return newId;
+    }
 
-      setRecordId(newId);
+    async function ensureRecordId() {
+      let rid = getRidFromUrl();
+      if (rid) {
+        updateRidUI(rid);
+        return rid;
+      }
+
+      showBanner(
+        `לא נמצא <b>rid</b> בכתובת, יוצר Record חדש בקולקשן שלך...`,
+        "info"
+      );
+
+      const newId = await createRecord();
+      setRidInUrl(newId);
+
+      showBanner(
+        `✅ נוצר Record חדש והמערכת מחוברת אליו.<br>
+         שמור את הלינק הזה (כולל <b>?rid=</b>) כדי לעבוד תמיד על אותו מידע.`,
+        "ok"
+      );
+
       return newId;
     }
 
     async function loadData() {
       try {
-        let rid = getRecordId();
-        if (!rid) {
-          rid = await createRecordIfNeeded();
-        }
+        const rid = await ensureRecordId();
 
         const res = await fetch(recordUrl(rid), { method: "GET", headers: apiHeaders() });
-        if (res.status === 404) {
-          // אם ה-id שמור אבל כבר לא קיים -> ניצור מחדש (אם יש COLLECTION_ID)
-          localStorage.removeItem(STORAGE_KEY_RECORD);
-          if (COLLECTION_ID) {
-            const newId = await createRecordIfNeeded();
-            const res2 = await fetch(recordUrl(newId), { method: "GET", headers: apiHeaders() });
-            if (!res2.ok) throw new Error(`${res2.status} - ${await res2.text()}`);
-            const result2 = await res2.json();
-            normalizeData(result2.data);
-          } else {
-            throw new Error(`404 - Record לא נמצא. הדבק RECORD_ID תקין או מלא COLLECTION_ID ליצירה אוטומטית.`);
-          }
-        } else {
-          if (!res.ok) throw new Error(`${res.status} - ${await res.text()}`);
-          const result = await res.json();
-          normalizeData(result.data);
-        }
+        if (!res.ok) throw new Error(`${res.status} - ${await res.text()}`);
+
+        const result = await res.json();
+        normalizeData(result.data);
+
       } catch (err) {
         console.error("⚠️ שגיאה בטעינת הנתונים:", err);
-        alert(
-          "שגיאה בטעינת MyJSON.\n\n" +
-          "בדיקות מהירות:\n" +
-          "1) RECORD_ID נכון וקיים?\n" +
-          "2) אם קולקשן PRIVATE: הדבקת ACCESS_TOKEN בכותרת x-collection-access-token?\n" +
-          "3) אם אין Record: מלא COLLECTION_ID כדי ליצור חדש.\n\n" +
-          "פרטים (Console): " + err.message
+        showBanner(
+          `❌ שגיאה בטעינת הנתונים מ-MyJSON.<br><br>
+           <div class="font-mono text-xs whitespace-pre-wrap">${escapeHtml(err.message)}</div>`,
+          "err"
         );
       }
 
@@ -242,8 +281,7 @@
 
     async function saveData() {
       try {
-        let rid = getRecordId();
-        if (!rid) rid = await createRecordIfNeeded();
+        const rid = await ensureRecordId();
 
         const fullData = {
           samples,
@@ -252,7 +290,6 @@
           updateDate: new Date().toLocaleDateString("he-IL")
         };
 
-        // לפי הדוקומנטציה: PUT /v2/records/{recordId} עם { data: {...} } :contentReference[oaicite:4]{index=4}
         const res = await fetch(recordUrl(rid), {
           method: "PUT",
           headers: apiHeaders(),
@@ -265,7 +302,11 @@
         return true;
       } catch (err) {
         console.error("❌ שגיאה בשמירה:", err);
-        alert("שגיאה בשמירת הנתונים.\nבדוק Console (F12).\n\n" + err.message);
+        showBanner(
+          `❌ שגיאה בשמירה ל-MyJSON.<br><br>
+           <div class="font-mono text-xs whitespace-pre-wrap">${escapeHtml(err.message)}</div>`,
+          "err"
+        );
         return false;
       }
     }
@@ -463,7 +504,6 @@
       `;
 
       lucide.createIcons();
-
       document.getElementById('statusFilter')?.addEventListener('change', renderMain);
       document.getElementById('searchInput')?.addEventListener('input', renderMain);
       document.getElementById('newSampleBtn')?.addEventListener('click', () => openSampleModal());
@@ -700,12 +740,25 @@
       if (e.target.id === "contactsModal") closeModal("contactsModal");
     });
 
+    document.getElementById("copyRidBtn").addEventListener("click", async () => {
+      const rid = getRidFromUrl();
+      if (!rid) return;
+      try {
+        await navigator.clipboard.writeText(rid);
+        showBanner("✅ ה־Record ID הועתק.", "ok");
+      } catch {
+        alert("לא ניתן להעתיק אוטומטית. העתק ידנית מהשורה למעלה.");
+      }
+    });
+
     document.addEventListener("DOMContentLoaded", () => {
       lucide.createIcons();
+      updateRidUI(getRidFromUrl());
       console.log("🚀 מאתחל את המערכת...");
       loadData();
     });
 
+    // חשיפת פונקציות ל-onclick
     window.openSampleModal = openSampleModal;
     window.deleteSample = deleteSample;
     window.editContact = editContact;
@@ -716,5 +769,6 @@
     window.clearContactForm = clearContactForm;
     window.saveContact = saveContact;
   </script>
+
 </body>
 </html>
