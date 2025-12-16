@@ -198,7 +198,9 @@
     // ==========================================
     // Data model
     // ==========================================
+    // ✅ הוספנו סטטוס "הוזמן" + ברירת מחדל לדוגמה חדשה = הוזמן
     const statusOptions = [
+      { value: 'ordered',   label: 'הוזמן',  color: 'bg-gray-100 text-gray-800' },
       { value: 'received',  label: 'התקבל',  color: 'bg-blue-100 text-blue-800' },
       { value: 'testing',   label: 'בבדיקה', color: 'bg-yellow-100 text-yellow-800' },
       { value: 'delivered', label: 'נמסר',   color: 'bg-purple-100 text-purple-800' }
@@ -241,7 +243,8 @@
         name: s.name || "",
         supplier: s.supplier || "",
         quantity: Number(s.quantity || 0),
-        status: s.status || "received",
+        // ✅ ברירת מחדל חדשה
+        status: s.status || "ordered",
         notifyEmail: s.notifyEmail || "",
         ccEmails: Array.isArray(s.ccEmails) ? s.ccEmails : [],
         assignedTo: s.assignedTo || null,
@@ -376,6 +379,7 @@
         : '—';
 
       let intro = '';
+      // ✅ אין מייל עבור "הוזמן" (לא אמור להגיע לפה, אבל נשאיר ברירת מחדל)
       if (newStatus === 'received') intro = 'רציתי לעדכן כי דוגמה התקבלה במחסן.';
       else if (newStatus === 'testing') intro = 'עדכון סטטוס לגבי דוגמה שנמצאת בבדיקה במחסן.';
       else if (newStatus === 'delivered') intro = 'רציתי לעדכן כי הדוגמה נמסרה מהמחסן.';
@@ -390,7 +394,7 @@
         rtl(`• דוגמה: ${sample.name}`),
         rtl(`• ספק: ${sample.supplier || ''}`),
         rtl(`• כמות: ${Number(sample.quantity || 0)}`),
-        rtl(`• תאריך קבלה: ${new Date(sample.date).toLocaleDateString('he-IL')}`)
+        rtl(`• תאריך: ${new Date(sample.date).toLocaleDateString('he-IL')}`)
       ];
 
       if (newStatus === 'delivered') {
@@ -482,6 +486,7 @@
 
       const stats = {
         total: samples.length,
+        ordered: samples.filter(s => s.status === 'ordered').length,
         received: samples.filter(s => s.status === 'received').length,
         testing: samples.filter(s => s.status === 'testing').length,
         delivered: samples.filter(s => s.status === 'delivered').length
@@ -583,7 +588,7 @@
           </button>
         </div>
 
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6">
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-3 sm:gap-4 mb-6">
           <div class="bg-white p-4 sm:p-6 rounded-xl border">
             <div class="flex justify-between mb-2">
               <span class="text-gray-600">סה"כ</span>
@@ -592,6 +597,16 @@
               </div>
             </div>
             <div class="text-2xl sm:text-3xl font-bold">${stats.total}</div>
+          </div>
+
+          <div class="bg-white p-4 sm:p-6 rounded-xl border">
+            <div class="flex justify-between mb-2">
+              <span class="text-gray-600">הוזמן</span>
+              <div class="w-10 h-10 bg-gray-700 rounded-lg flex items-center justify-center">
+                <i data-lucide="shopping-cart" class="w-5 h-5 text-white"></i>
+              </div>
+            </div>
+            <div class="text-2xl sm:text-3xl font-bold">${stats.ordered}</div>
           </div>
 
           <div class="bg-white p-4 sm:p-6 rounded-xl border">
@@ -648,7 +663,7 @@
                   <th class="px-6 py-3 text-right text-sm font-medium text-gray-700">שם הדוגמה</th>
                   <th class="px-6 py-3 text-right text-sm font-medium text-gray-700">ספק</th>
                   <th class="px-6 py-3 text-right text-sm font-medium text-gray-700">כמות</th>
-                  <th class="px-6 py-3 text-right text-sm font-medium text-gray-700">תאריך קבלה</th>
+                  <th class="px-6 py-3 text-right text-sm font-medium text-gray-700">תאריך</th>
                   <th class="px-6 py-3 text-right text-sm font-medium text-gray-700">סטטוס</th>
                   <th class="px-6 py-3 text-right text-sm font-medium text-gray-700">נמסר ל</th>
                   <th class="px-6 py-3 text-right text-sm font-medium text-gray-700">פעולות</th>
@@ -669,7 +684,7 @@
     }
 
     // ==========================================
-    // Sample Modal + תאריך קבלה (חדש)
+    // Sample Modal + תאריך
     // ==========================================
     function toDateInputValue(isoOrDate) {
       const d = isoOrDate ? new Date(isoOrDate) : new Date();
@@ -718,15 +733,15 @@
         </div>
 
         <div>
-          <label class="block text-sm font-medium mb-2">תאריך קבלה</label>
+          <label class="block text-sm font-medium mb-2">תאריך</label>
           <input id="sampleDate" type="date" value="${dateValue}" class="w-full px-4 py-2 border rounded-lg">
-          <div class="text-xs text-gray-500 mt-1">אפשר לתקן תאריך קבלה במקרה של טעות.</div>
+          <div class="text-xs text-gray-500 mt-1">לא חובה. אפשר להשאיר ריק בסטטוס "הוזמן".</div>
         </div>
 
         <div>
           <label class="block text-sm font-medium mb-2">סטטוס</label>
           <select id="sampleStatus" class="w-full px-4 py-2 border rounded-lg">
-            ${statusOptions.map(o => `<option value="${o.value}" ${(currentSample?.status === o.value) || (!currentSample && o.value === 'received') ? 'selected' : ''}>${o.label}</option>`).join('')}
+            ${statusOptions.map(o => `<option value="${o.value}" ${(currentSample?.status === o.value) || (!currentSample && o.value === 'ordered') ? 'selected' : ''}>${o.label}</option>`).join('')}
           </select>
         </div>
 
@@ -804,7 +819,8 @@
 
       const saved = await saveData();
 
-      if (saved && status !== oldStatus) {
+      // ✅ לא שולחים מייל על "הוזמן"
+      if (saved && status !== oldStatus && status !== 'ordered') {
         const sampleRef = currentSample || samples[samples.length - 1];
         sendEmail(sampleRef, oldStatus, status);
         await saveData();
