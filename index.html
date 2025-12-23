@@ -495,17 +495,45 @@
       let filtered = samples;
       const statusFilter = document.getElementById('statusFilter')?.value || 'all';
       const searchTermRaw = (document.getElementById('searchInput')?.value || '');
-      const searchTerm = searchTermRaw.toLowerCase();
+      const searchTerm = searchTermRaw.trim().toLowerCase();
+
 
       if (statusFilter !== 'all') filtered = filtered.filter(s => s.status === statusFilter);
 
       if (searchTerm) {
-        filtered = filtered.filter(s =>
-          (s.name || '').toLowerCase().includes(searchTerm) ||
-          (s.supplier || '').toLowerCase().includes(searchTerm) ||
-          String(s.seq || '').includes(searchTermRaw.trim())
-        );
-      }
+  filtered = filtered.filter(s => {
+    const statusLabel =
+      (statusOptions.find(st => st.value === s.status)?.label) || "";
+
+    const assignedName =
+      s.assignedTo
+        ? (contacts.find(c => c.id === s.assignedTo)?.name || "")
+        : "";
+
+    const dateLabel = s.date ? new Date(s.date).toLocaleDateString('he-IL') : "";
+
+    // ✅ טקסט שמכיל את כל מה שמופיע בטבלה (ועוד קצת)
+    const haystack = [
+  s.seq,
+  "#" + (s.seq ?? ""),
+  s.name,
+  s.supplier,
+  s.quantity,
+  dateLabel,
+  statusLabel,
+  assignedName,
+  s.notifyEmail,
+  ...(Array.isArray(s.ccEmails) ? s.ccEmails : [])
+]
+  .filter(v => v !== null && v !== undefined)
+  .join(" ")
+  .toLowerCase();
+
+
+    return haystack.includes(searchTerm);
+  });
+}
+
 
       const tableRows = filtered.length === 0
         ? `<tr><td colspan="7" class="px-6 py-12 text-center text-gray-500">אין דוגמאות להצגה</td></tr>`
@@ -998,3 +1026,4 @@
 
 </body>
 </html>
+
