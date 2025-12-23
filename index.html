@@ -29,6 +29,19 @@
 
     /* מונע “התפוצצות” טקסט ארוך (מייל/ספק/שם) */
     .break-anywhere { overflow-wrap: anywhere; word-break: break-word; }
+
+    /* ✅ תיקון: לא רואים טקסט שמקלידים בשדה חיפוש (דפדפן/תוספים/דארק מוד) */
+    #searchInput{
+      color: #111827 !important;                 /* text-gray-900 */
+      background-color: #ffffff !important;      /* bg-white */
+      caret-color: #111827 !important;
+      -webkit-text-fill-color: #111827 !important; /* כרום/ספארי/דארק-מוד */
+    }
+    #searchInput::placeholder{
+      color: #9ca3af !important;                 /* placeholder-gray-400 */
+      -webkit-text-fill-color: #9ca3af !important;
+      opacity: 1;
+    }
   </style>
 </head>
 
@@ -1282,3 +1295,4 @@
 
 </body>
 </html>
+
