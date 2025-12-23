@@ -101,7 +101,8 @@
 
   <!-- מודל דוגמה -->
   <div id="sampleModal" class="fixed inset-0 bg-black bg-opacity-50 items-center justify-center p-4 z-50 hidden">
-    <div class="bg-white rounded-xl max-w-md w-full p-6 modal-card">
+    <!-- ✅ הגדלנו קצת כדי להכיל הזנה מרובה (לא נוגע בנתונים / MyJSON) -->
+    <div class="bg-white rounded-xl max-w-2xl w-full p-6 modal-card">
       <div class="flex items-center justify-between mb-6">
         <h3 class="text-xl font-bold" id="sampleModalTitle">דוגמה חדשה</h3>
         <button id="closeSampleModal" class="text-gray-500 hover:text-gray-700">
@@ -237,6 +238,11 @@
       search: "",
       status: "all"
     };
+
+    // ==========================================
+    // ✅ NEW: הזנה מרובה (רק בצד UI, לא משנה MyJSON בכלל)
+    // ==========================================
+    let draftRows = []; // [{name,supplier,quantity}]
 
     function generateId(prefix = 'SMPL') {
       return prefix + "-" + Date.now().toString(36).toUpperCase() + "-" + Math.random().toString(36).slice(2, 6).toUpperCase();
@@ -429,24 +435,35 @@
       return lines.join('\n');
     }
 
-    function buildBulkDeliveredEmailBody({ samplesList, assignedToId }) {
+    // ✅ NEW: מייל מרוכז ל"התקבל" / "בבדיקה" / "נמסר" – כמו בדוגמה בודדת, אבל עם רשימה
+    // (לא פוגע בכלום: רק פונקציה חדשה + שימוש בה בהזנה מרובה)
+    function buildBulkStatusEmailBody({ samplesList, newStatus, assignedToId }) {
       const assignedName = assignedToId
         ? (contacts.find(c => c.id === assignedToId)?.name || '—')
         : '—';
 
+      let intro = '';
+      if (newStatus === 'received') intro = 'רציתי לעדכן כי מספר דוגמאות התקבלו במחסן.';
+      else if (newStatus === 'testing') intro = 'עדכון סטטוס: מספר דוגמאות נמצאות בבדיקה במחסן.';
+      else if (newStatus === 'delivered') intro = 'רציתי לעדכן כי מספר דוגמאות נמסרו מהמחסן.';
+      else intro = 'עדכון סטטוס לגבי מספר דוגמאות במחסן.';
+
       const lines = [
         rtl('שלום,'),
         '',
-        rtl('רציתי לעדכן כי מספר דוגמאות נמסרו מהמחסן.'),
-        '',
-        rtl(`נמסר ל: ${assignedName}`),
-        '',
-        rtl('רשימת דוגמאות:')
+        rtl(intro),
+        ''
       ];
+
+      if (newStatus === 'delivered') {
+        lines.push(rtl(`נמסר ל: ${assignedName}`), '');
+      }
+
+      lines.push(rtl('רשימת דוגמאות:'));
 
       for (const s of samplesList) {
         const dateLabel = s.date ? new Date(s.date).toLocaleDateString('he-IL') : '';
-        lines.push(rtl(`• #${Number(s.seq || 0)} | ${s.name} | ספק: ${s.supplier || ''} | כמות: ${Number(s.quantity || 0)} | תאריך: ${dateLabel}`));
+        lines.push(rtl(`• דוגמה: ${s.name} | ספק: ${s.supplier || ''} | כמות: ${Number(s.quantity || 0)} | תאריך: ${dateLabel} | #${Number(s.seq || 0)}`));
       }
 
       lines.push('', rtl('בברכה,'), rtl('מחסן CIDEV'));
@@ -494,6 +511,56 @@
       });
 
       openEmailDraft({ toList, subject, body });
+    }
+
+    // ✅ NEW: שליחה מרוכזת גם ל"התקבל" ו"בבדיקה" (ולא רק "נמסר")
+    function sendBulkStatusEmail({ toMain, ccEmails, samplesList, newStatus, assignedToId }) {
+      const mainTo = (toMain || '').trim();
+      if (!mainTo) {
+        alert('לא נבחר נמען למייל (נמען ראשי).');
+        return;
+      }
+
+      const extra = Array.isArray(ccEmails) ? ccEmails : [];
+      const toList = Array.from(new Set([mainTo, ...extra].map(x => (x || '').trim()).filter(Boolean)));
+
+      const newLabel = statusOptions.find(s => s.value === newStatus)?.label || newStatus;
+      const subject = `עדכון דוגמאות - ${newLabel} (${samplesList.length})`;
+      const body = buildBulkStatusEmailBody({ samplesList, newStatus, assignedToId });
+
+      emailLog.push({
+        to: mainTo,
+        extra,
+        subject,
+        sampleId: `BULK-${newStatus}-${Date.now()}`,
+        timestamp: new Date().toISOString()
+      });
+
+      openEmailDraft({ toList, subject, body });
+    }
+
+    function buildBulkDeliveredEmailBody({ samplesList, assignedToId }) {
+      const assignedName = assignedToId
+        ? (contacts.find(c => c.id === assignedToId)?.name || '—')
+        : '—';
+
+      const lines = [
+        rtl('שלום,'),
+        '',
+        rtl('רציתי לעדכן כי מספר דוגמאות נמסרו מהמחסן.'),
+        '',
+        rtl(`נמסר ל: ${assignedName}`),
+        '',
+        rtl('רשימת דוגמאות:')
+      ];
+
+      for (const s of samplesList) {
+        const dateLabel = s.date ? new Date(s.date).toLocaleDateString('he-IL') : '';
+        lines.push(rtl(`• #${Number(s.seq || 0)} | ${s.name} | ספק: ${s.supplier || ''} | כמות: ${Number(s.quantity || 0)} | תאריך: ${dateLabel}`));
+      }
+
+      lines.push('', rtl('בברכה,'), rtl('מחסן CIDEV'));
+      return lines.join('\n');
     }
 
     function sendBulkDeliveredEmail({ toMain, ccEmails, assignedToId, samplesList }) {
@@ -670,9 +737,6 @@
           return haystack.includes(searchTerm);
         });
       }
-
-      const selectedIdsVisible = filtered.map(s => s.id);
-      const selectedCount = Array.from(selectedSampleIds).filter(id => selectedIdsVisible.includes(id)).length || selectedSampleIds.size;
 
       const selectedSamplesForDefaults = Array.from(selectedSampleIds)
         .map(id => samples.find(s => s.id === id))
@@ -931,7 +995,6 @@
 
       lucide.createIcons();
 
-      // ✅ מאזינים שמעדכנים state ואז מרנדרים
       document.getElementById('statusFilter')?.addEventListener('change', (e) => {
         uiState.status = e.target.value || 'all';
         renderMain();
@@ -944,9 +1007,6 @@
 
       document.getElementById('newSampleBtn')?.addEventListener('click', () => openSampleModal());
 
-      // ===========================
-      // ✅ בחירה מרובה - אירועים
-      // ===========================
       document.querySelectorAll('.rowChk').forEach(chk => {
         chk.addEventListener('change', (e) => {
           const id = e.target.dataset.id;
@@ -996,11 +1056,9 @@
         });
       }
 
-      // ✅ FIX: החזרת פוקוס וסמן אחרי רינדור (מונע "תו אחד ואז צריך ללחוץ שוב")
       if (wasSearchFocused) {
         const el = document.getElementById('searchInput');
         if (el) {
-          // מוודא שהפוקוס חוזר בלי קפיצת גלילה
           el.focus({ preventScroll: true });
           if (typeof searchSelStart === 'number' && typeof searchSelEnd === 'number') {
             try { el.setSelectionRange(searchSelStart, searchSelEnd); } catch {}
@@ -1023,9 +1081,181 @@
       return `${yyyy}-${mm}-${dd}`;
     }
 
+    // ==========================================
+    // ✅ NEW: הזנה מרובה - helpers
+    // ==========================================
+    function newDraftRow(prefill = {}) {
+      return {
+        name: prefill.name || "",
+        supplier: prefill.supplier || "",
+        quantity: Number(prefill.quantity || 0)
+      };
+    }
+
+    function renderDraftRows() {
+      const wrap = document.getElementById('draftRowsWrap');
+      if (!wrap) return;
+
+      wrap.innerHTML = draftRows.map((r, i) => `
+        <div class="border rounded-lg p-3 bg-gray-50">
+          <div class="flex items-center justify-between mb-3">
+            <div class="text-sm font-bold">דוגמה ${i + 1}</div>
+            <div class="flex items-center gap-2">
+              <button type="button" class="px-2 py-1 text-sm border rounded hover:bg-white" onclick="duplicateDraftRow(${i})">שכפל</button>
+              <button type="button" class="px-2 py-1 text-sm border rounded hover:bg-white" onclick="removeDraftRow(${i})">מחק</button>
+            </div>
+          </div>
+
+          <div class="space-y-3">
+            <div>
+              <label class="block text-sm font-medium mb-2">שם הדוגמה</label>
+              <input id="draftName_${i}" type="text" value="${escapeHtml(r.name)}" class="w-full px-4 py-2 border rounded-lg" placeholder="שם הדוגמה">
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium mb-2">ספק</label>
+              <input id="draftSupplier_${i}" type="text" value="${escapeHtml(r.supplier)}" class="w-full px-4 py-2 border rounded-lg" placeholder="ספק">
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium mb-2">כמות</label>
+              <input id="draftQty_${i}" type="number" min="0" value="${Number(r.quantity || 0)}" class="w-full px-4 py-2 border rounded-lg">
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function addDraftRow(prefill = {}) {
+      draftRows.push(newDraftRow(prefill));
+      renderDraftRows();
+      lucide.createIcons();
+    }
+
+    function duplicateDraftRow(i) {
+      const r = draftRows[i];
+      if (!r) return;
+      draftRows.splice(i + 1, 0, newDraftRow(r));
+      renderDraftRows();
+      lucide.createIcons();
+    }
+
+    function removeDraftRow(i) {
+      draftRows.splice(i, 1);
+      if (draftRows.length === 0) draftRows.push(newDraftRow());
+      renderDraftRows();
+      lucide.createIcons();
+    }
+
+    function syncDraftRowsFromDom() {
+      for (let i = 0; i < draftRows.length; i++) {
+        const name = document.getElementById(`draftName_${i}`)?.value ?? "";
+        const supplier = document.getElementById(`draftSupplier_${i}`)?.value ?? "";
+        const qtyRaw = document.getElementById(`draftQty_${i}`)?.value ?? "0";
+        draftRows[i].name = String(name).trim();
+        draftRows[i].supplier = String(supplier).trim();
+        draftRows[i].quantity = parseInt(qtyRaw, 10) || 0;
+      }
+    }
+
+    function getBatchDefaults() {
+      const status = document.getElementById('batchStatus')?.value || 'ordered';
+      const notifyEmail = document.getElementById('batchNotifyEmail')?.value || '';
+      const ccSel = document.getElementById('batchCcEmails');
+      const ccEmails = ccSel ? Array.from(ccSel.selectedOptions).map(o => (o.value || '').trim()).filter(Boolean) : [];
+      const assignedTo = document.getElementById('batchAssigned')?.value || null;
+
+      const dateInput = document.getElementById('batchDate')?.value; // YYYY-MM-DD
+      const dateIso = dateInput ? new Date(dateInput + "T12:00:00").toISOString() : new Date().toISOString();
+
+      return { status, notifyEmail, ccEmails, assignedTo, dateIso };
+    }
+
+    // ✅ NEW: אסיפת רשימת נמענים כמו בדוגמה בודדת (נמען ראשי + נוספים) עבור הזנה מרובה
+    function getBatchToList(notifyEmail, ccEmails) {
+      const mainTo = (notifyEmail || '').trim();
+      const extra = Array.isArray(ccEmails) ? ccEmails : [];
+      const toList = Array.from(new Set([mainTo, ...extra].map(x => (x || '').trim()).filter(Boolean)));
+      return { mainTo, extra, toList };
+    }
+
+    async function saveNewSamplesBatch() {
+      syncDraftRowsFromDom();
+
+      const { status, notifyEmail, ccEmails, assignedTo, dateIso } = getBatchDefaults();
+
+      const cleaned = draftRows
+        .map(r => ({ name: (r.name || "").trim(), supplier: (r.supplier || "").trim(), quantity: Number(r.quantity || 0) }))
+        .filter(r => r.name);
+
+      if (cleaned.length === 0) return alert('יש להזין לפחות שם דוגמה אחד');
+
+      if (status === 'delivered' && !assignedTo) {
+        return alert('כשסטטוס "נמסר" חובה לבחור למי נמסר הפריט.');
+      }
+
+      // אם בחרו סטטוס שמייצר מייל (received/testing/delivered) וחסר נמען – נחסום
+      if (cleaned.length >= 1 && status !== 'ordered') {
+        const { mainTo } = getBatchToList(notifyEmail, ccEmails);
+        if (!mainTo) {
+          return alert('בחר "הודעה למייל (נמען ראשי)" כדי לשלוח מייל בסטטוס זה.');
+        }
+      }
+
+      const createdSamples = [];
+      let seq = nextSampleSeq();
+
+      for (const r of cleaned) {
+        const id = generateId("SMPL");
+        const s = {
+          id,
+          seq,
+          name: r.name,
+          supplier: r.supplier,
+          quantity: Number(r.quantity || 0),
+          status,
+          notifyEmail,
+          ccEmails,
+          assignedTo: assignedTo || null,
+          date: dateIso
+        };
+        samples.push(s);
+        createdSamples.push(s);
+        seq++;
+      }
+
+      const saved = await saveData();
+      if (!saved) return;
+
+      // ✅ שינוי שביקשת:
+      // אם נוצרו כמה דוגמאות ובחרת ב"התקבל" (או "בבדיקה"/"נמסר") → נשלח מייל מרוכז אחד עם כל הפרטים.
+      if (createdSamples.length >= 2 && status !== 'ordered') {
+        const { mainTo, extra } = getBatchToList(notifyEmail, ccEmails);
+
+        sendBulkStatusEmail({
+          toMain: mainTo,
+          ccEmails: extra,
+          samplesList: createdSamples,
+          newStatus: status,
+          assignedToId: assignedTo || null
+        });
+
+        await saveData();
+      }
+
+      // דוגמה אחת – נשאר כמו קודם (מייל בודד)
+      if (createdSamples.length === 1 && status !== 'ordered') {
+        sendEmail(createdSamples[0], null, status);
+        await saveData();
+      }
+
+      closeModal('sampleModal');
+      renderMain();
+    }
+
     function openSampleModal(id = null) {
       currentSample = id ? samples.find(s => s.id === id) : null;
-      document.getElementById('sampleModalTitle').textContent = currentSample ? 'עריכת דוגמה' : 'דוגמה חדשה';
+      document.getElementById('sampleModalTitle').textContent = currentSample ? 'עריכת דוגמה' : 'דוגמה חדשה (הזנה מרובה)';
 
       const contactOptions = contacts.map(c =>
         `<option value="${escapeHtml(c.email)}" ${currentSample?.notifyEmail === c.email ? 'selected' : ''}>${escapeHtml(c.name)} - ${escapeHtml(c.email)}</option>`
@@ -1043,67 +1273,148 @@
 
       const dateValue = toDateInputValue(currentSample?.date || new Date());
 
-      document.getElementById('sampleFormContent').innerHTML = `
-        ${currentSample ? `<div class="text-xs text-gray-500">מספר דוגמה: <b>#${Number(currentSample.seq || 0)}</b></div>` : ``}
+      if (currentSample) {
+        document.getElementById('sampleFormContent').innerHTML = `
+          <div class="text-xs text-gray-500">מספר דוגמה: <b>#${Number(currentSample.seq || 0)}</b></div>
 
-        <div>
-          <label class="block text-sm font-medium mb-2">שם הדוגמה</label>
-          <input id="sampleName" type="text" value="${escapeHtml(currentSample?.name || '')}" class="w-full px-4 py-2 border rounded-lg">
-        </div>
+          <div>
+            <label class="block text-sm font-medium mb-2">שם הדוגמה</label>
+            <input id="sampleName" type="text" value="${escapeHtml(currentSample?.name || '')}" class="w-full px-4 py-2 border rounded-lg">
+          </div>
 
-        <div>
-          <label class="block text-sm font-medium mb-2">ספק</label>
-          <input id="sampleSupplier" type="text" value="${escapeHtml(currentSample?.supplier || '')}" class="w-full px-4 py-2 border rounded-lg">
-        </div>
+          <div>
+            <label class="block text-sm font-medium mb-2">ספק</label>
+            <input id="sampleSupplier" type="text" value="${escapeHtml(currentSample?.supplier || '')}" class="w-full px-4 py-2 border rounded-lg">
+          </div>
 
-        <div>
-          <label class="block text-sm font-medium mb-2">כמות</label>
-          <input id="sampleQuantity" type="number" min="0" value="${Number(currentSample?.quantity || 0)}" class="w-full px-4 py-2 border rounded-lg">
-        </div>
+          <div>
+            <label class="block text-sm font-medium mb-2">כמות</label>
+            <input id="sampleQuantity" type="number" min="0" value="${Number(currentSample?.quantity || 0)}" class="w-full px-4 py-2 border rounded-lg">
+          </div>
 
-        <div>
-          <label class="block text-sm font-medium mb-2">תאריך</label>
-          <input id="sampleDate" type="date" value="${dateValue}" class="w-full px-4 py-2 border rounded-lg">
-          <div class="text-xs text-gray-500 mt-1">לא חובה. אפשר להשאיר ריק בסטטוס "הוזמן".</div>
-        </div>
+          <div>
+            <label class="block text-sm font-medium mb-2">תאריך</label>
+            <input id="sampleDate" type="date" value="${dateValue}" class="w-full px-4 py-2 border rounded-lg">
+            <div class="text-xs text-gray-500 mt-1">לא חובה. אפשר להשאיר ריק בסטטוס "הוזמן".</div>
+          </div>
 
-        <div>
-          <label class="block text-sm font-medium mb-2">סטטוס</label>
-          <select id="sampleStatus" class="w-full px-4 py-2 border rounded-lg">
-            ${statusOptions.map(o => `<option value="${o.value}" ${(currentSample?.status === o.value) || (!currentSample && o.value === 'ordered') ? 'selected' : ''}>${o.label}</option>`).join('')}
-          </select>
-        </div>
+          <div>
+            <label class="block text-sm font-medium mb-2">סטטוס</label>
+            <select id="sampleStatus" class="w-full px-4 py-2 border rounded-lg">
+              ${statusOptions.map(o => `<option value="${o.value}" ${(currentSample?.status === o.value) ? 'selected' : ''}>${o.label}</option>`).join('')}
+            </select>
+          </div>
 
-        <div>
-          <label class="block text-sm font-medium mb-2">הודעה למייל (נמען ראשי)</label>
-          <select id="sampleNotifyEmail" class="w-full px-4 py-2 border rounded-lg">
-            <option value="">-- בחר איש קשר --</option>
-            ${contactOptions}
-          </select>
-        </div>
+          <div>
+            <label class="block text-sm font-medium mb-2">הודעה למייל (נמען ראשי)</label>
+            <select id="sampleNotifyEmail" class="w-full px-4 py-2 border rounded-lg">
+              <option value="">-- בחר איש קשר --</option>
+              ${contactOptions}
+            </select>
+          </div>
 
-        <div>
-          <label class="block text-sm font-medium mb-2">נמענים נוספים (לבחירה מתוך אנשי הקשר)</label>
-          <select id="sampleCcEmails" multiple class="w-full px-4 py-2 border rounded-lg h-28">
-            ${ccOptions}
-          </select>
-          <div class="text-xs text-gray-500 mt-1">אפשר לבחור כמה (Ctrl/Shift). בפועל הם ייכנסו יחד לשדה "אל" כדי למנוע באג של Outlook.</div>
-        </div>
+          <div>
+            <label class="block text-sm font-medium mb-2">נמענים נוספים (לבחירה מתוך אנשי הקשר)</label>
+            <select id="sampleCcEmails" multiple class="w-full px-4 py-2 border rounded-lg h-28">
+              ${ccOptions}
+            </select>
+            <div class="text-xs text-gray-500 mt-1">אפשר לבחור כמה (Ctrl/Shift). בפועל הם ייכנסו יחד לשדה "אל" כדי למנוע באג של Outlook.</div>
+          </div>
 
-        <div>
-          <label class="block text-sm font-medium mb-2">נמסר ל</label>
-          <select id="sampleAssigned" class="w-full px-4 py-2 border rounded-lg">
-            <option value="">-- בחר איש קשר --</option>
-            ${assignedOptions}
-          </select>
-          <div class="text-xs text-gray-500 mt-1">כשסטטוס "נמסר" חובה לבחור למי נמסר.</div>
-        </div>
+          <div>
+            <label class="block text-sm font-medium mb-2">נמסר ל</label>
+            <select id="sampleAssigned" class="w-full px-4 py-2 border rounded-lg">
+              <option value="">-- בחר איש קשר --</option>
+              ${assignedOptions}
+            </select>
+            <div class="text-xs text-gray-500 mt-1">כשסטטוס "נמסר" חובה לבחור למי נמסר.</div>
+          </div>
 
-        <div class="mt-4 flex flex-col sm:flex-row justify-end gap-3">
-          <button onclick="closeModal('sampleModal')" class="px-4 py-2 border rounded-lg w-full sm:w-auto">בטל</button>
-          <button onclick="saveSample()" class="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 w-full sm:w-auto">שמור</button>
-        </div>
-      `;
+          <div class="mt-4 flex flex-col sm:flex-row justify-end gap-3">
+            <button onclick="closeModal('sampleModal')" class="px-4 py-2 border rounded-lg w-full sm:w-auto">בטל</button>
+            <button onclick="saveSample()" class="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 w-full sm:w-auto">שמור</button>
+          </div>
+        `;
+      } else {
+        draftRows = [newDraftRow()];
+        const batchDateValue = toDateInputValue(new Date());
+
+        document.getElementById('sampleFormContent').innerHTML = `
+          <div class="bg-gray-50 border rounded-lg p-4">
+            <div class="flex items-start gap-2 text-sm text-gray-700">
+              <i data-lucide="info" class="w-4 h-4 mt-0.5"></i>
+              <div>
+                אפשר להזין כמה דוגמאות באותו חלון.
+                כל דוגמה שתוסיף תופיע כשורה נפרדת בטבלה.
+                <div class="text-xs text-gray-500 mt-1">אם תבחר סטטוס "התקבל" ותזין יותר מדוגמה אחת – ייפתח מייל מרוכז אחד עם כל הדוגמאות.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="bg-white border rounded-lg p-4">
+            <h4 class="font-bold mb-3">ברירות מחדל לכל הדוגמאות בהזנה זו</h4>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium mb-2">תאריך</label>
+                <input id="batchDate" type="date" value="${batchDateValue}" class="w-full px-4 py-2 border rounded-lg">
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium mb-2">סטטוס</label>
+                <select id="batchStatus" class="w-full px-4 py-2 border rounded-lg">
+                  ${statusOptions.map(o => `<option value="${o.value}" ${o.value === 'ordered' ? 'selected' : ''}>${o.label}</option>`).join('')}
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium mb-2">הודעה למייל (נמען ראשי)</label>
+                <select id="batchNotifyEmail" class="w-full px-4 py-2 border rounded-lg">
+                  <option value="">-- בחר איש קשר --</option>
+                  ${contacts.map(c => `<option value="${escapeHtml(c.email)}">${escapeHtml(c.name)} - ${escapeHtml(c.email)}</option>`).join('')}
+                </select>
+                <div class="text-xs text-gray-500 mt-1">אם בחרת סטטוס שאינו "הוזמן" – מומלץ לבחור נמען.</div>
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium mb-2">נמסר ל</label>
+                <select id="batchAssigned" class="w-full px-4 py-2 border rounded-lg">
+                  <option value="">-- בחר איש קשר --</option>
+                  ${contacts.map(c => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)}</option>`).join('')}
+                </select>
+                <div class="text-xs text-gray-500 mt-1">אם בחרת סטטוס "נמסר" חובה לבחור כאן.</div>
+              </div>
+
+              <div class="md:col-span-2">
+                <label class="block text-sm font-medium mb-2">נמענים נוספים (לבחירה מתוך אנשי הקשר)</label>
+                <select id="batchCcEmails" multiple class="w-full px-4 py-2 border rounded-lg h-28">
+                  ${contacts.map(c => `<option value="${escapeHtml(c.email)}">${escapeHtml(c.name)} - ${escapeHtml(c.email)}</option>`).join('')}
+                </select>
+                <div class="text-xs text-gray-500 mt-1">אפשר לבחור כמה (Ctrl/Shift).</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between">
+            <h4 class="font-bold">דוגמאות להזנה</h4>
+            <button type="button" onclick="addDraftRow()" class="px-3 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 flex items-center gap-2">
+              <i data-lucide="plus" class="w-4 h-4"></i>
+              הוסף דוגמה
+            </button>
+          </div>
+
+          <div id="draftRowsWrap" class="space-y-3"></div>
+
+          <div class="mt-4 flex flex-col sm:flex-row justify-end gap-3">
+            <button onclick="closeModal('sampleModal')" class="px-4 py-2 border rounded-lg w-full sm:w-auto">בטל</button>
+            <button onclick="saveNewSamplesBatch()" class="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 w-full sm:w-auto">
+              שמור הכל
+            </button>
+          </div>
+        `;
+
+        renderDraftRows();
+      }
 
       document.getElementById('sampleModal').classList.remove('hidden');
       document.getElementById('sampleModal').classList.add('flex');
@@ -1115,6 +1426,7 @@
       document.getElementById(modalId).classList.remove('flex');
       currentSample = null;
       editingContact = null;
+      draftRows = [];
     }
 
     async function saveSample() {
@@ -1323,6 +1635,12 @@
     window.saveContact = saveContact;
     window.deleteEmailLogItem = deleteEmailLogItem;
     window.clearEmailLog = clearEmailLog;
+
+    // ✅ NEW: חשיפה להזנה מרובה
+    window.addDraftRow = addDraftRow;
+    window.duplicateDraftRow = duplicateDraftRow;
+    window.removeDraftRow = removeDraftRow;
+    window.saveNewSamplesBatch = saveNewSamplesBatch;
   </script>
 
 </body>
