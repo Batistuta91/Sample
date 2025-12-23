@@ -198,7 +198,6 @@
     // ==========================================
     // Data model
     // ==========================================
-    // ✅ הוספנו סטטוס "הוזמן" + ברירת מחדל לדוגמה חדשה = הוזמן
     const statusOptions = [
       { value: 'ordered',   label: 'הוזמן',  color: 'bg-gray-100 text-gray-800' },
       { value: 'received',  label: 'התקבל',  color: 'bg-blue-100 text-blue-800' },
@@ -211,6 +210,9 @@
     let contacts = [];
     let currentSample = null;
     let editingContact = null;
+
+    // ✅ בחירה מרובה בטבלה
+    let selectedSampleIds = new Set();
 
     function generateId(prefix = 'SMPL') {
       return prefix + "-" + Date.now().toString(36).toUpperCase() + "-" + Math.random().toString(36).slice(2, 6).toUpperCase();
@@ -243,7 +245,6 @@
         name: s.name || "",
         supplier: s.supplier || "",
         quantity: Number(s.quantity || 0),
-        // ✅ ברירת מחדל חדשה
         status: s.status || "ordered",
         notifyEmail: s.notifyEmail || "",
         ccEmails: Array.isArray(s.ccEmails) ? s.ccEmails : [],
@@ -379,7 +380,6 @@
         : '—';
 
       let intro = '';
-      // ✅ אין מייל עבור "הוזמן" (לא אמור להגיע לפה, אבל נשאיר ברירת מחדל)
       if (newStatus === 'received') intro = 'רציתי לעדכן כי דוגמה התקבלה במחסן.';
       else if (newStatus === 'testing') intro = 'עדכון סטטוס לגבי דוגמה שנמצאת בבדיקה במחסן.';
       else if (newStatus === 'delivered') intro = 'רציתי לעדכן כי הדוגמה נמסרה מהמחסן.';
@@ -399,6 +399,32 @@
 
       if (newStatus === 'delivered') {
         lines.push(rtl(`• נמסר ל: ${assignedName}`));
+      }
+
+      lines.push('', rtl('בברכה,'), rtl('מחסן CIDEV'));
+      return lines.join('\n');
+    }
+
+    // ✅ גוף מייל מרוכז למסירה (כמה דוגמאות יחד)
+    function buildBulkDeliveredEmailBody({ samplesList, assignedToId }) {
+      const assignedName = assignedToId
+        ? (contacts.find(c => c.id === assignedToId)?.name || '—')
+        : '—';
+
+      const lines = [
+        rtl('שלום,'),
+        '',
+        rtl('רציתי לעדכן כי מספר דוגמאות נמסרו מהמחסן.'),
+        '',
+        rtl(`נמסר ל: ${assignedName}`),
+        '',
+        rtl('רשימת דוגמאות:')
+      ];
+
+      // רשימה מסודרת
+      for (const s of samplesList) {
+        const dateLabel = s.date ? new Date(s.date).toLocaleDateString('he-IL') : '';
+        lines.push(rtl(`• #${Number(s.seq || 0)} | ${s.name} | ספק: ${s.supplier || ''} | כמות: ${Number(s.quantity || 0)} | תאריך: ${dateLabel}`));
       }
 
       lines.push('', rtl('בברכה,'), rtl('מחסן CIDEV'));
@@ -448,6 +474,31 @@
       openEmailDraft({ toList, subject, body });
     }
 
+    // ✅ מייל אחד מרוכז (כולל בחירת נמען ראשי ונמענים נוספים)
+    function sendBulkDeliveredEmail({ toMain, ccEmails, assignedToId, samplesList }) {
+      const mainTo = (toMain || '').trim();
+      if (!mainTo) {
+        alert('לא נבחר נמען למייל (נמען ראשי).');
+        return;
+      }
+
+      const extra = Array.isArray(ccEmails) ? ccEmails : [];
+      const toList = Array.from(new Set([mainTo, ...extra].map(x => (x || '').trim()).filter(Boolean)));
+
+      const subject = `עדכון דוגמאות - נמסרו (${samplesList.length})`;
+      const body = buildBulkDeliveredEmailBody({ samplesList, assignedToId });
+
+      emailLog.push({
+        to: mainTo,
+        extra,
+        subject,
+        sampleId: `BULK-${Date.now()}`, // רישום ליומן
+        timestamp: new Date().toISOString()
+      });
+
+      openEmailDraft({ toList, subject, body });
+    }
+
     async function deleteEmailLogItem(idxFromEnd) {
       const realIndex = emailLog.length - 1 - idxFromEnd;
       if (realIndex < 0 || realIndex >= emailLog.length) return;
@@ -479,6 +530,66 @@
     }
 
     // ==========================================
+    // Bulk actions - update + email
+    // ==========================================
+    function getUniqueEmailsFromSelected(samplesList) {
+      const emails = [];
+      for (const s of samplesList) {
+        const main = (s.notifyEmail || '').trim();
+        if (main) emails.push(main);
+        const extra = Array.isArray(s.ccEmails) ? s.ccEmails : [];
+        for (const e of extra) if ((e || '').trim()) emails.push((e || '').trim());
+      }
+      // ייחוד (case-insensitive)
+      const seen = new Set();
+      const out = [];
+      for (const e of emails) {
+        const k = String(e).toLowerCase();
+        if (seen.has(k)) continue;
+        seen.add(k);
+        out.push(e);
+      }
+      return out;
+    }
+
+    async function bulkDeliverAndEmail({ ids, assignedToId, emailMain, emailCcList }) {
+      if (!ids || !ids.length) return;
+
+      const selected = ids
+        .map(id => samples.find(s => s.id === id))
+        .filter(Boolean);
+
+      if (!selected.length) return;
+
+      if (!assignedToId) return alert('בחר למי נמסר');
+
+      if (!confirm(`לסמן ${selected.length} דוגמאות כ"נמסר" ולפתוח מייל מרוכז?`)) return;
+
+      // עדכון סטטוס
+      for (const s of selected) {
+        s.status = 'delivered';
+        s.assignedTo = assignedToId;
+      }
+
+      const saved = await saveData();
+      if (!saved) return;
+
+      // פתיחת מייל אחד מרוכז + רישום ליומן
+      sendBulkDeliveredEmail({
+        toMain: emailMain,
+        ccEmails: emailCcList,
+        assignedToId,
+        samplesList: selected
+      });
+
+      await saveData();
+
+      // ניקוי בחירה
+      selectedSampleIds.clear();
+      renderMain();
+    }
+
+    // ==========================================
     // UI - Render
     // ==========================================
     function renderMain() {
@@ -497,51 +608,133 @@
       const searchTermRaw = (document.getElementById('searchInput')?.value || '');
       const searchTerm = searchTermRaw.trim().toLowerCase();
 
-
       if (statusFilter !== 'all') filtered = filtered.filter(s => s.status === statusFilter);
 
       if (searchTerm) {
-  filtered = filtered.filter(s => {
-    const statusLabel =
-      (statusOptions.find(st => st.value === s.status)?.label) || "";
+        filtered = filtered.filter(s => {
+          const statusLabel =
+            (statusOptions.find(st => st.value === s.status)?.label) || "";
 
-    const assignedName =
-      s.assignedTo
-        ? (contacts.find(c => c.id === s.assignedTo)?.name || "")
-        : "";
+          const assignedName =
+            s.assignedTo
+              ? (contacts.find(c => c.id === s.assignedTo)?.name || "")
+              : "";
 
-    const dateLabel = s.date ? new Date(s.date).toLocaleDateString('he-IL') : "";
+          const dateLabel = s.date ? new Date(s.date).toLocaleDateString('he-IL') : "";
 
-    // ✅ טקסט שמכיל את כל מה שמופיע בטבלה (ועוד קצת)
-    const haystack = [
-  s.seq,
-  "#" + (s.seq ?? ""),
-  s.name,
-  s.supplier,
-  s.quantity,
-  dateLabel,
-  statusLabel,
-  assignedName,
-  s.notifyEmail,
-  ...(Array.isArray(s.ccEmails) ? s.ccEmails : [])
-]
-  .filter(v => v !== null && v !== undefined)
-  .join(" ")
-  .toLowerCase();
+          const haystack = [
+            s.seq,
+            "#" + (s.seq ?? ""),
+            s.name,
+            s.supplier,
+            s.quantity,
+            dateLabel,
+            statusLabel,
+            assignedName,
+            s.notifyEmail,
+            ...(Array.isArray(s.ccEmails) ? s.ccEmails : [])
+          ]
+            .filter(v => v !== null && v !== undefined)
+            .join(" ")
+            .toLowerCase();
 
+          return haystack.includes(searchTerm);
+        });
+      }
 
-    return haystack.includes(searchTerm);
-  });
-}
+      // ✅ סרגל מרוכז כשיש בחירה
+      const selectedIdsVisible = filtered.map(s => s.id);
+      const selectedCount = Array.from(selectedSampleIds).filter(id => selectedIdsVisible.includes(id)).length || selectedSampleIds.size;
 
+      // ברירת מחדל: להציע אוטומטית נמען ראשי/נמענים נוספים מתוך הדוגמאות שנבחרו
+      const selectedSamplesForDefaults = Array.from(selectedSampleIds)
+        .map(id => samples.find(s => s.id === id))
+        .filter(Boolean);
+
+      const suggestedEmails = getUniqueEmailsFromSelected(selectedSamplesForDefaults);
+      const suggestedMain = suggestedEmails[0] || "";
+      const suggestedCc = suggestedEmails.slice(1);
+
+      const contactEmailOptions = contacts.map(c => {
+        const email = (c.email || '').trim();
+        return `<option value="${escapeHtml(email)}">${escapeHtml(c.name)} - ${escapeHtml(email)}</option>`;
+      }).join('');
+
+      const suggestedMainOptionHtml = suggestedMain
+        ? `<option value="${escapeHtml(suggestedMain)}" selected>מוצע: ${escapeHtml(suggestedMain)}</option>`
+        : '';
+
+      const suggestedCcSet = new Set(suggestedCc.map(e => String(e).toLowerCase()));
+      const ccOptionsFromContacts = contacts.map(c => {
+        const email = (c.email || '').trim();
+        const sel = suggestedCcSet.has(String(email).toLowerCase()) ? 'selected' : '';
+        return `<option value="${escapeHtml(email)}" ${sel}>${escapeHtml(c.name)} - ${escapeHtml(email)}</option>`;
+      }).join('');
+
+      const assignedOptions = contacts.map(c =>
+        `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)}</option>`
+      ).join('');
+
+      const bulkBar = selectedSampleIds.size ? `
+        <div class="bg-white rounded-xl border mb-4 p-4">
+          <div class="flex flex-col gap-3">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <div class="text-sm text-gray-700">
+                נבחרו <b>${selectedSampleIds.size}</b> דוגמאות
+              </div>
+              <button id="bulkClearBtn" class="px-3 py-2 border rounded-lg hover:bg-gray-50 w-full sm:w-auto">
+                נקה בחירה
+              </button>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <label class="block text-sm font-medium mb-2">נמסר ל</label>
+                <select id="bulkAssignedTo" class="px-4 py-2 border rounded-lg w-full">
+                  <option value="">בחר איש קשר</option>
+                  ${assignedOptions}
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium mb-2">מייל מרוכז - נמען ראשי</label>
+                <select id="bulkEmailMain" class="px-4 py-2 border rounded-lg w-full">
+                  <option value="">-- בחר איש קשר --</option>
+                  ${suggestedMainOptionHtml}
+                  ${contactEmailOptions}
+                </select>
+                <div class="text-xs text-gray-500 mt-1">אפשר לבחור למי לשלוח (לא חייב להיות אחד מהדוגמאות שנבחרו).</div>
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium mb-2">מייל מרוכז - נמענים נוספים</label>
+                <select id="bulkEmailCc" multiple class="px-4 py-2 border rounded-lg w-full h-24">
+                  ${ccOptionsFromContacts}
+                </select>
+                <div class="text-xs text-gray-500 mt-1">אפשר לבחור כמה. בפועל כולם ייכנסו יחד לשדה "אל" כדי למנוע באג של Outlook.</div>
+              </div>
+            </div>
+
+            <div class="flex flex-col sm:flex-row gap-3 sm:justify-end">
+              <button id="bulkDeliverBtn" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 w-full sm:w-auto">
+                סמן כנמסר + מייל מרוכז
+              </button>
+            </div>
+          </div>
+        </div>
+      ` : '';
 
       const tableRows = filtered.length === 0
-        ? `<tr><td colspan="7" class="px-6 py-12 text-center text-gray-500">אין דוגמאות להצגה</td></tr>`
+        ? `<tr><td colspan="8" class="px-6 py-12 text-center text-gray-500">אין דוגמאות להצגה</td></tr>`
         : filtered.map(s => {
             const status = statusOptions.find(st => st.value === s.status) || statusOptions[0];
             const assigned = s.assignedTo ? (contacts.find(c => c.id === s.assignedTo)?.name || 'לא ידוע') : '-';
+            const checked = selectedSampleIds.has(s.id) ? 'checked' : '';
             return `
               <tr class="hover:bg-gray-50">
+                <td class="px-6 py-4">
+                  <input type="checkbox" class="rowChk h-4 w-4" data-id="${escapeHtml(s.id)}" ${checked}>
+                </td>
                 <td class="px-6 py-4">
                   <div class="font-medium break-anywhere">${escapeHtml(s.name)}</div>
                   <div class="text-sm text-gray-400">#${Number(s.seq || 0)}</div>
@@ -682,12 +875,16 @@
           </div>
         </div>
 
+        ${bulkBar}
+
         <div class="bg-white rounded-xl border overflow-hidden">
-          <!-- ✅ גלילה אופקית רק לטבלה כשצריך (מובייל/מסכים צרים) -->
           <div class="table-scroll">
             <table class="w-full">
               <thead class="bg-gray-50 border-b">
                 <tr>
+                  <th class="px-6 py-3 text-right text-sm font-medium text-gray-700 w-10">
+                    <input id="selectAllChk" type="checkbox" class="h-4 w-4">
+                  </th>
                   <th class="px-6 py-3 text-right text-sm font-medium text-gray-700">שם הדוגמה</th>
                   <th class="px-6 py-3 text-right text-sm font-medium text-gray-700">ספק</th>
                   <th class="px-6 py-3 text-right text-sm font-medium text-gray-700">כמות</th>
@@ -709,6 +906,61 @@
       document.getElementById('statusFilter')?.addEventListener('change', renderMain);
       document.getElementById('searchInput')?.addEventListener('input', renderMain);
       document.getElementById('newSampleBtn')?.addEventListener('click', () => openSampleModal());
+
+      // ===========================
+      // ✅ בחירה מרובה - אירועים
+      // ===========================
+      // צ׳קבוקס לכל שורה
+      document.querySelectorAll('.rowChk').forEach(chk => {
+        chk.addEventListener('change', (e) => {
+          const id = e.target.dataset.id;
+          if (!id) return;
+          if (e.target.checked) selectedSampleIds.add(id);
+          else selectedSampleIds.delete(id);
+          renderMain();
+        });
+      });
+
+      // בחר הכל (לפי מה שמוצג כרגע - filtered)
+      const selectAll = document.getElementById('selectAllChk');
+      if (selectAll) {
+        const visibleIds = filtered.map(x => x.id);
+        const allSelected = visibleIds.length > 0 && visibleIds.every(id => selectedSampleIds.has(id));
+        selectAll.checked = allSelected;
+
+        selectAll.addEventListener('change', (e) => {
+          if (e.target.checked) visibleIds.forEach(id => selectedSampleIds.add(id));
+          else visibleIds.forEach(id => selectedSampleIds.delete(id));
+          renderMain();
+        });
+      }
+
+      // פעולות מרוכזות
+      const bulkClearBtn = document.getElementById('bulkClearBtn');
+      if (bulkClearBtn) {
+        bulkClearBtn.addEventListener('click', () => {
+          selectedSampleIds.clear();
+          renderMain();
+        });
+      }
+
+      const bulkDeliverBtn = document.getElementById('bulkDeliverBtn');
+      if (bulkDeliverBtn) {
+        bulkDeliverBtn.addEventListener('click', async () => {
+          const assignedToId = document.getElementById('bulkAssignedTo')?.value || "";
+          const emailMain = document.getElementById('bulkEmailMain')?.value || "";
+
+          const ccSel = document.getElementById('bulkEmailCc');
+          const emailCcList = ccSel ? Array.from(ccSel.selectedOptions).map(o => (o.value || '').trim()).filter(Boolean) : [];
+
+          await bulkDeliverAndEmail({
+            ids: Array.from(selectedSampleIds),
+            assignedToId,
+            emailMain,
+            emailCcList
+          });
+        });
+      }
     }
 
     // ==========================================
@@ -861,6 +1113,10 @@
     async function deleteSample(id) {
       if (!confirm("למחוק דוגמה זו?")) return;
       samples = samples.filter(s => s.id !== id);
+
+      // אם נמחקה דוגמה שנבחרה - לנקות מהבחירה
+      if (selectedSampleIds.has(id)) selectedSampleIds.delete(id);
+
       await saveData();
       renderMain();
     }
@@ -1026,4 +1282,3 @@
 
 </body>
 </html>
-
