@@ -610,6 +610,17 @@
     // UI - Render
     // ==========================================
     function renderMain() {
+      // ✅ FIX: שמירת פוקוס ומיקום הסמן לפני רינדור (כי אנחנו מחליפים innerHTML)
+      const activeEl = document.activeElement;
+      const wasSearchFocused = activeEl && activeEl.id === 'searchInput';
+      const wasStatusFocused = activeEl && activeEl.id === 'statusFilter';
+      let searchSelStart = null, searchSelEnd = null;
+
+      if (wasSearchFocused && activeEl && typeof activeEl.selectionStart === 'number') {
+        searchSelStart = activeEl.selectionStart;
+        searchSelEnd = activeEl.selectionEnd;
+      }
+
       document.getElementById('contactsCount').textContent = contacts.length;
 
       const stats = {
@@ -983,6 +994,21 @@
             emailCcList
           });
         });
+      }
+
+      // ✅ FIX: החזרת פוקוס וסמן אחרי רינדור (מונע "תו אחד ואז צריך ללחוץ שוב")
+      if (wasSearchFocused) {
+        const el = document.getElementById('searchInput');
+        if (el) {
+          // מוודא שהפוקוס חוזר בלי קפיצת גלילה
+          el.focus({ preventScroll: true });
+          if (typeof searchSelStart === 'number' && typeof searchSelEnd === 'number') {
+            try { el.setSelectionRange(searchSelStart, searchSelEnd); } catch {}
+          }
+        }
+      } else if (wasStatusFocused) {
+        const el = document.getElementById('statusFilter');
+        if (el) el.focus({ preventScroll: true });
       }
     }
 
