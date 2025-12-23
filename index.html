@@ -240,7 +240,7 @@
     };
 
     // ==========================================
-    // ✅ NEW: הזנה מרובה (רק בצד UI, לא משנה MyJSON בכלל)
+    // ✅ הזנה מרובה (רק בצד UI, לא משנה MyJSON בכלל)
     // ==========================================
     let draftRows = []; // [{name,supplier,quantity}]
 
@@ -435,8 +435,6 @@
       return lines.join('\n');
     }
 
-    // ✅ NEW: מייל מרוכז ל"התקבל" / "בבדיקה" / "נמסר" – כמו בדוגמה בודדת, אבל עם רשימה
-    // (לא פוגע בכלום: רק פונקציה חדשה + שימוש בה בהזנה מרובה)
     function buildBulkStatusEmailBody({ samplesList, newStatus, assignedToId }) {
       const assignedName = assignedToId
         ? (contacts.find(c => c.id === assignedToId)?.name || '—')
@@ -513,7 +511,6 @@
       openEmailDraft({ toList, subject, body });
     }
 
-    // ✅ NEW: שליחה מרוכזת גם ל"התקבל" ו"בבדיקה" (ולא רק "נמסר")
     function sendBulkStatusEmail({ toMain, ccEmails, samplesList, newStatus, assignedToId }) {
       const mainTo = (toMain || '').trim();
       if (!mainTo) {
@@ -698,7 +695,6 @@
         delivered: samples.filter(s => s.status === 'delivered').length
       };
 
-      // ✅ משתמשים ב-state במקום לקרוא מה-DOM (כי ה-DOM נבנה מחדש)
       let filtered = samples;
       const statusFilter = uiState.status || 'all';
       const searchTermRaw = uiState.search || '';
@@ -1082,7 +1078,7 @@
     }
 
     // ==========================================
-    // ✅ NEW: הזנה מרובה - helpers
+    // ✅ הזנה מרובה - helpers
     // ==========================================
     function newDraftRow(prefill = {}) {
       return {
@@ -1126,13 +1122,32 @@
       `).join('');
     }
 
+    function syncDraftRowsFromDom() {
+      for (let i = 0; i < draftRows.length; i++) {
+        const nameEl = document.getElementById(`draftName_${i}`);
+        const supEl  = document.getElementById(`draftSupplier_${i}`);
+        const qtyEl  = document.getElementById(`draftQty_${i}`);
+        if (!nameEl || !supEl || !qtyEl) continue; // אם עוד לא רונדר / נסגר מודל
+
+        const name = nameEl.value ?? "";
+        const supplier = supEl.value ?? "";
+        const qtyRaw = qtyEl.value ?? "0";
+        draftRows[i].name = String(name).trim();
+        draftRows[i].supplier = String(supplier).trim();
+        draftRows[i].quantity = parseInt(qtyRaw, 10) || 0;
+      }
+    }
+
+    // ✅ FIX מרכזי: לפני הוספה/שכפול/מחיקה - מסנכרנים את מה שהוקלד לשדות כדי שלא ייעלם ברינדור מחדש
     function addDraftRow(prefill = {}) {
+      syncDraftRowsFromDom();
       draftRows.push(newDraftRow(prefill));
       renderDraftRows();
       lucide.createIcons();
     }
 
     function duplicateDraftRow(i) {
+      syncDraftRowsFromDom();
       const r = draftRows[i];
       if (!r) return;
       draftRows.splice(i + 1, 0, newDraftRow(r));
@@ -1141,21 +1156,11 @@
     }
 
     function removeDraftRow(i) {
+      syncDraftRowsFromDom();
       draftRows.splice(i, 1);
       if (draftRows.length === 0) draftRows.push(newDraftRow());
       renderDraftRows();
       lucide.createIcons();
-    }
-
-    function syncDraftRowsFromDom() {
-      for (let i = 0; i < draftRows.length; i++) {
-        const name = document.getElementById(`draftName_${i}`)?.value ?? "";
-        const supplier = document.getElementById(`draftSupplier_${i}`)?.value ?? "";
-        const qtyRaw = document.getElementById(`draftQty_${i}`)?.value ?? "0";
-        draftRows[i].name = String(name).trim();
-        draftRows[i].supplier = String(supplier).trim();
-        draftRows[i].quantity = parseInt(qtyRaw, 10) || 0;
-      }
     }
 
     function getBatchDefaults() {
@@ -1171,7 +1176,6 @@
       return { status, notifyEmail, ccEmails, assignedTo, dateIso };
     }
 
-    // ✅ NEW: אסיפת רשימת נמענים כמו בדוגמה בודדת (נמען ראשי + נוספים) עבור הזנה מרובה
     function getBatchToList(notifyEmail, ccEmails) {
       const mainTo = (notifyEmail || '').trim();
       const extra = Array.isArray(ccEmails) ? ccEmails : [];
@@ -1194,7 +1198,6 @@
         return alert('כשסטטוס "נמסר" חובה לבחור למי נמסר הפריט.');
       }
 
-      // אם בחרו סטטוס שמייצר מייל (received/testing/delivered) וחסר נמען – נחסום
       if (cleaned.length >= 1 && status !== 'ordered') {
         const { mainTo } = getBatchToList(notifyEmail, ccEmails);
         if (!mainTo) {
@@ -1227,8 +1230,6 @@
       const saved = await saveData();
       if (!saved) return;
 
-      // ✅ שינוי שביקשת:
-      // אם נוצרו כמה דוגמאות ובחרת ב"התקבל" (או "בבדיקה"/"נמסר") → נשלח מייל מרוכז אחד עם כל הפרטים.
       if (createdSamples.length >= 2 && status !== 'ordered') {
         const { mainTo, extra } = getBatchToList(notifyEmail, ccEmails);
 
@@ -1243,7 +1244,6 @@
         await saveData();
       }
 
-      // דוגמה אחת – נשאר כמו קודם (מייל בודד)
       if (createdSamples.length === 1 && status !== 'ordered') {
         sendEmail(createdSamples[0], null, status);
         await saveData();
@@ -1636,7 +1636,7 @@
     window.deleteEmailLogItem = deleteEmailLogItem;
     window.clearEmailLog = clearEmailLog;
 
-    // ✅ NEW: חשיפה להזנה מרובה
+    // ✅ חשיפה להזנה מרובה
     window.addDraftRow = addDraftRow;
     window.duplicateDraftRow = duplicateDraftRow;
     window.removeDraftRow = removeDraftRow;
