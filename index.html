@@ -11,13 +11,13 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
 
-  <style>
+ <style>
     body { font-family: system-ui, -apple-system, sans-serif; }
 
     /* לכפתורי multi-select בלי אייקון דיפולטי */
     select[multiple] { background-image: none !important; }
 
-    /* ✅ מניעת “בריחה” מהמסך והוספת גלילה רק לאזורי תוכן (לא לכל הדף) */
+    /* ✅ מניעת "בריחה" מהמסך והוספת גלילה רק לאזורי תוכן (לא לכל הדף) */
     html, body { height: 100%; overflow-x: hidden; }
 
     /* טבלאות/תוכן רחב – יתגללו אופקית בתוך הקופסה */
@@ -27,20 +27,31 @@
     /* מודלים – גלילה פנימית */
     .modal-card { max-height: 90vh; overflow: auto; }
 
-    /* מונע “התפוצצות” טקסט ארוך (מייל/ספק/שם) */
+    /* מונע "התפוצצות" טקסט ארוך (מייל/ספק/שם) */
     .break-anywhere { overflow-wrap: anywhere; word-break: break-word; }
 
-    /* ✅ תיקון: לא רואים טקסט שמקלידים בשדה חיפוש (דפדפן/תוספים/דארק מוד) */
-    #searchInput{
-      color: #111827 !important;                 /* text-gray-900 */
-      background-color: #ffffff !important;      /* bg-white */
+    /* ✅ תיקון מוגבר: לא רואים טקסט שמקלידים בשדה חיפוש */
+    #searchInput {
+      color: #111827 !important;
+      background-color: #ffffff !important;
       caret-color: #111827 !important;
-      -webkit-text-fill-color: #111827 !important; /* כרום/ספארי/דארק-מוד */
+      -webkit-text-fill-color: #111827 !important;
+      /* כיבוי פילטרים שמפריעים */
+      filter: none !important;
+      -webkit-filter: none !important;
+      /* מניעת שכבות נוספות */
+      text-shadow: none !important;
+      -webkit-appearance: none !important;
+      appearance: none !important;
     }
-    #searchInput::placeholder{
-      color: #9ca3af !important;                 /* placeholder-gray-400 */
+    #searchInput::placeholder {
+      color: #9ca3af !important;
       -webkit-text-fill-color: #9ca3af !important;
-      opacity: 1;
+      opacity: 1 !important;
+    }
+    /* בטיחות נוספת - גם על האייקון */
+    #searchInput + i[data-lucide="search"] {
+      color: #9ca3af !important;
     }
   </style>
 </head>
@@ -1295,4 +1306,5 @@
 
 </body>
 </html>
+
 
