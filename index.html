@@ -670,6 +670,39 @@
       renderMain();
     }
 
+    // ✅ חדש: סימון מספר פריטים כ"התקבל" + מייל מרוכז (כמו נמסר)
+    async function bulkReceiveAndEmail({ ids, emailMain, emailCcList }) {
+      if (!ids || !ids.length) return;
+
+      const selected = ids
+        .map(id => samples.find(s => s.id === id))
+        .filter(Boolean);
+
+      if (!selected.length) return;
+
+      if (!confirm(`לסמן ${selected.length} דוגמאות כ"התקבל" ולפתוח מייל מרוכז?`)) return;
+
+      for (const s of selected) {
+        s.status = 'received';
+      }
+
+      const saved = await saveData();
+      if (!saved) return;
+
+      sendBulkStatusEmail({
+        toMain: emailMain,
+        ccEmails: emailCcList,
+        samplesList: selected,
+        newStatus: 'received',
+        assignedToId: null
+      });
+
+      await saveData();
+
+      selectedSampleIds.clear();
+      renderMain();
+    }
+
     // ==========================================
     // UI - Render
     // ==========================================
@@ -803,6 +836,10 @@
             </div>
 
             <div class="flex flex-col sm:flex-row gap-3 sm:justify-end">
+              <button id="bulkReceiveBtn" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 w-full sm:w-auto">
+                סמן כהתקבל + מייל מרוכז
+              </button>
+
               <button id="bulkDeliverBtn" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 w-full sm:w-auto">
                 סמן כנמסר + מייל מרוכז
               </button>
@@ -1031,6 +1068,21 @@
         bulkClearBtn.addEventListener('click', () => {
           selectedSampleIds.clear();
           renderMain();
+        });
+      }
+
+      const bulkReceiveBtn = document.getElementById('bulkReceiveBtn');
+      if (bulkReceiveBtn) {
+        bulkReceiveBtn.addEventListener('click', async () => {
+          const emailMain = document.getElementById('bulkEmailMain')?.value || "";
+          const ccSel = document.getElementById('bulkEmailCc');
+          const emailCcList = ccSel ? Array.from(ccSel.selectedOptions).map(o => (o.value || '').trim()).filter(Boolean) : [];
+
+          await bulkReceiveAndEmail({
+            ids: Array.from(selectedSampleIds),
+            emailMain,
+            emailCcList
+          });
         });
       }
 
