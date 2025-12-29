@@ -1639,13 +1639,20 @@
     // Events + init
     // ==========================================
     document.getElementById('exportJsonBtn').addEventListener('click', exportToJson);
-    document.getElementById('openContactsBtn').addEventListener('click', openContactsModal);
-    document.getElementById('closeContactsModal').addEventListener('click', () => closeModal('contactsModal'));
-    document.getElementById('closeSampleModal').addEventListener('click', () => closeModal('sampleModal'));
+document.getElementById('openContactsBtn').addEventListener('click', openContactsModal);
+document.getElementById('closeContactsModal').addEventListener('click', () => closeModal('contactsModal'));
 
-    document.getElementById('sampleModal').addEventListener('click', (e) => {
-      if (e.target.id === "sampleModal") closeModal("sampleModal");
-    });
+// ❌ לא סוגרים את חלון הדוגמאות עם X – רק דרך כפתור "בטל"
+document.getElementById('closeSampleModal').addEventListener('click', () => {
+  // intentionally empty
+});
+
+
+   // ❌ לא סוגרים את חלון הדוגמאות בלחיצה על הרקע
+document.getElementById('sampleModal').addEventListener('click', (e) => {
+  // בכוונה לא עושים כלום
+});
+
     document.getElementById('contactsModal').addEventListener('click', (e) => {
       if (e.target.id === "contactsModal") closeModal("contactsModal");
     });
@@ -1697,3 +1704,4 @@
 
 </body>
 </html>
+
